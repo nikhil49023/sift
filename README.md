@@ -11,7 +11,8 @@ SIFT collects public GitHub repository snapshots, inspects code and history, val
 - A LangGraph workflow coordinates four persisted stages to collect evidence, run forensic rules, evaluate the rubric, and assemble an assessment. PostgreSQL owns evidence/stage checkpoints; BullMQ owns bounded retries. Cancellation stops the graph, and the outbox supports recovery.
 - Five forensic pillars inspect timeline anomalies, concentrated initial commits, contribution history, hollow implementations, and configured template/upstream matches. Missing inputs or coverage are shown as unknown. Observations are prompts for review, not automatic misconduct findings.
 - SIFT checks structured output, evidence IDs, excerpts, line ranges, and dimension-specific sources. Missing evidence is **unscored**, rather than zero. An overall score requires all four dimensions and complete acquisition coverage.
-- The dashboard displays saved evidence and real progress, separate reviewer decisions, and downloadable PDF reports. No seeded candidate or score data drives the application.
+- **Live review** displays saved evidence and real progress, separate reviewer decisions, and downloadable PDF reports. Its candidate data comes from the backend.
+- The frontend opens with an editorial loading screen and home page. **Start your shortlist** opens a responsive demo workspace with four clearly labeled sample profiles, search, comparison, browser-saved shortlists, notes, and an editable search brief. Demo profiles and illustrative scores stay separate from Live review and are never submitted as audit evidence.
 
 The backend performs static inspection of Git objects and ASTs. It never installs dependencies or runs submitted code. CI results are reported from GitHub. JavaScript/TypeScript and Python have AST checks; other languages have limited inspection. Large repositories, capped API history, and unavailable upstreams produce explicit limitations. Groq receives a bounded evidence packet, so reviewers must inspect whether its citations support its reasoning.
 
@@ -59,7 +60,7 @@ The default Render blueprint uses free web and Redis resources. `DEPLOYMENT_MODE
 | `backend/src/` | Express API, ingestion, forensic rules, worker, PDFs, retention |
 | `backend/src/jev/` | Rubric, judge harness, citation validation, deterministic aggregation |
 | `shared/src/` | Validated submission and evidence contracts, version identifiers |
-| `frontend/src/` | Authenticated reviewer dashboard |
+| `frontend/src/` | Editorial shortlist demo and authenticated reviewer dashboard |
 | `migrations/` | PostgreSQL schema, tenant policies, private storage setup |
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) and [OWNERSHIP.md](OWNERSHIP.md). Harika owns rubric and decision-provider backend review; Nikhil owns ingestion, orchestration, API, and infrastructure. Git authorship follows who actually performs the work. `INSTRUCTIONS.md` and `FRONTEND_SPRINT_BRIEF.md` are earlier design briefs; this README describes the implemented behavior.
