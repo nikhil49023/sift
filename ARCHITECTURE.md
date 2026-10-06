@@ -12,7 +12,7 @@ flowchart TD
     Queue --> Worker[Render worker]
     Worker --> Scout[Scout: pinned Git and GitHub evidence]
     Scout --> Forensics[Forensics: five deterministic pillars]
-    Forensics --> Judge[JEV: bounded Groq packet and citation validation]
+    Forensics --> Judge[Groq proposal and optional TypeSafe Jev review]
     Judge --> Synth[Synthesizer: scores, coverage and review flags]
     Synth --> DB
     Worker --> Storage[Private Supabase PDF storage]
@@ -34,7 +34,7 @@ Public GitHub repositories are normalized to owner/name. Octokit collects cached
 
 Timeline checks distinguish author and committer dates and limited push-event observations. Concentrated initial churn triggers review, not proof of a zip import. Contributions are descriptive and cannot establish identity or productivity. Isolated AST parsing identifies empty and placeholder bodies in supported languages. Similarity compares exact blobs against declared upstream and an organization-approved, revision-pinned template corpus; it is not an exhaustive plagiarism search.
 
-## JEV contract
+## Rubric and decision-provider contract
 
 | Dimension | Weight |
 | --- | --- |
@@ -43,7 +43,7 @@ Timeline checks distinguish author and committer dates and limited push-event ob
 | Testing and verification | 25% |
 | Collaboration hygiene | 20% |
 
-Each dimension has anchored levels 0–4 or null for insufficient evidence. Groq serves `openai/gpt-oss-120b` with strict JSON output. The model receives untrusted repository text as data, has no execution tools, and must return structured output. Citation line bounds are required on the wire and nullable for non-code sources, then normalized for application validation. The validator checks evidence IDs, verbatim excerpts, line bounds, and appropriate source kinds. One corrective response is allowed before withholding the judgment. Citation correspondence is verified mechanically; semantic support still requires reviewer judgment.
+Each dimension has anchored levels 0–4 or null for insufficient evidence. Groq serves `openai/gpt-oss-120b` with strict JSON output. The model receives untrusted repository text as data, has no execution tools, and must return structured output. Citation line bounds are required on the wire and nullable for non-code sources, then normalized for application validation. The validator checks evidence IDs, verbatim excerpts, line bounds, and appropriate source kinds. One corrective response is allowed before withholding the judgment. Citation correspondence is verified mechanically; semantic support still requires reviewer judgment. The default `DECISION_PROVIDER=none` uses Groq only. The opt-in TypeSafe Jev layer asks separate Noul questions about evidence support and rubric anchors, retains probabilities and the actual model, and withholds unsupported levels. The worker checkpoints the Groq proposal before verification so Jev retries can reuse it. Jev is TypeSafe's model, not the name of SIFT's rubric. See [DECISION_PROVIDERS.md](DECISION_PROVIDERS.md).
 
 The weighted overall score is available only when all dimensions are scored and acquisition coverage is complete. Forensic risk is separate from technical quality and role fit. Rankings require an explicit rollout flag and compare the latest eligible audit only within one cohort and matching rubric, prompt, provider, and model versions. Reviewers make the final workflow-specific decision and record a rationale.
 

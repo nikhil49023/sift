@@ -1,11 +1,173 @@
-import React, { useState } from 'react';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
-const names = { systemsRigor: 'Systems', algorithmicDepth: 'Logic', testingVerification: 'Verification', collaborationHygiene: 'Collaboration' };
-export default function RadarScorecard({ assessment, audit, decisions = [], workflow, onDecision, canWrite, onExportDossier, exporting, busy }) {
-  const [decision, setDecision] = useState('review'), [rationale, setRationale] = useState('');
-  const dimensions = assessment?.dimensions || {}; const hasAll = Object.keys(names).every(k => dimensions[k]?.level != null);
-  const data = Object.entries(names).map(([key, subject]) => ({ subject, score: dimensions[key]?.level == null ? null : dimensions[key].level * 25 }));
-  const finished = audit && ['completed', 'partial'].includes(audit.status);
-  return <aside className="flex flex-col gap-6"><section className="panel"><h2 className="font-bold">JEV dimensional assessment</h2><p className="text-4xl font-bold mt-4 text-cyan-300">{assessment?.overallScore == null ? 'Unscored' : `${assessment.overallScore}/100`}</p><p className="text-xs text-slate-400 mt-2">{assessment?.riskLevel?.replaceAll('_', ' ') || 'Awaiting evaluation'}</p>{hasAll ? <div className="h-64 mt-4"><ResponsiveContainer width="100%" height="100%"><RadarChart data={data}><PolarGrid stroke="#243044" /><PolarAngleAxis dataKey="subject" stroke="#94a3b8" tick={{ fontSize: 11 }} /><PolarRadiusAxis domain={[0, 100]} /><Radar dataKey="score" stroke="#06b6d4" fill="#06b6d4" fillOpacity={.25} isAnimationActive={false} /></RadarChart></ResponsiveContainer></div> : <p className="text-sm text-slate-500 py-6">The radar appears when all four dimensions have sufficient evidence. Unknown dimensions are not zero.</p>}<dl className="grid grid-cols-2 gap-3 mt-4">{Object.entries(names).map(([key, label]) => <div key={key} className="border border-slate-800 p-3 rounded-xl"><dt className="text-xs text-slate-500">{label}</dt><dd className="text-sm mt-1">{dimensions[key]?.level == null ? 'Unscored' : `${dimensions[key].level}/4`}</dd></div>)}</dl>{assessment?.roleFit && <div className="mt-4 border-t border-slate-800 pt-3"><h3 className="text-sm font-semibold">Role fit</h3><p className="text-xs text-slate-400 mt-1">{assessment.roleFit.rationale}</p></div>}<button className="button secondary w-full justify-center mt-4" disabled={!finished || !canWrite || exporting} onClick={onExportDossier}>{exporting ? 'Generating PDF…' : 'Download evidence dossier'}</button></section>
-    <section className="panel"><h2 className="font-bold">Reviewer decision</h2><p className="text-xs text-slate-400 mt-2">Your decision is recorded separately from the automated assessment.</p><form onSubmit={e => { e.preventDefault(); onDecision(decision, rationale); }}><label className="field mt-4">Decision<select value={decision} onChange={e => setDecision(e.target.value)} disabled={!canWrite || !finished}><option value="review">Review</option>{workflow === 'recruiting' ? <><option value="advance">Advance</option><option value="decline">Decline</option></> : <><option value="award">Award</option><option value="no-award">No award</option></>}</select></label><label className="field mt-3">Rationale<textarea required minLength={10} maxLength={5000} rows={4} value={rationale} onChange={e => setRationale(e.target.value)} disabled={!canWrite || !finished} /></label><button className="button mt-3" disabled={!canWrite || !finished || busy}>Record decision</button></form><div className="mt-4 space-y-3">{decisions.map(item => <article key={item.id} className="border-t border-slate-800 pt-3 text-xs"><strong className="text-cyan-300">{item.decision}</strong><p className="text-slate-400 mt-1">{item.rationale}</p><p className="text-slate-500 mt-1">{new Date(item.created_at).toLocaleString()}</p></article>)}</div></section></aside>;
+import DecisionReview from "./DecisionReview";
+import React, { useState } from "react";
+import {
+  Radar,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  ResponsiveContainer,
+} from "recharts";
+const names = {
+  systemsRigor: "Systems",
+  algorithmicDepth: "Logic",
+  testingVerification: "Verification",
+  collaborationHygiene: "Collaboration",
+};
+export default function RadarScorecard({
+  assessment,
+  audit,
+  decisions = [],
+  workflow,
+  onDecision,
+  canWrite,
+  onExportDossier,
+  exporting,
+  busy,
+}) {
+  const [decision, setDecision] = useState("review"),
+    [rationale, setRationale] = useState("");
+  const dimensions = assessment?.dimensions || {};
+  const hasAll = Object.keys(names).every((k) => dimensions[k]?.level != null);
+  const data = Object.entries(names).map(([key, subject]) => ({
+    subject,
+    score: dimensions[key]?.level == null ? null : dimensions[key].level * 25,
+  }));
+  const finished = audit && ["completed", "partial"].includes(audit.status);
+  return (
+    <aside className="flex flex-col gap-6">
+      <section className="panel">
+        <h2 className="font-bold">Engineering assessment</h2>
+        <p className="text-4xl font-bold mt-4 text-cyan-300">
+          {assessment?.overallScore == null
+            ? "Unscored"
+            : `${assessment.overallScore}/100`}
+        </p>
+        <p className="text-xs text-slate-400 mt-2">
+          {assessment?.riskLevel?.replaceAll("_", " ") || "Awaiting evaluation"}
+        </p>
+        {hasAll ? (
+          <div className="h-64 mt-4">
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart data={data}>
+                <PolarGrid stroke="#243044" />
+                <PolarAngleAxis
+                  dataKey="subject"
+                  stroke="#94a3b8"
+                  tick={{ fontSize: 11 }}
+                />
+                <PolarRadiusAxis domain={[0, 100]} />
+                <Radar
+                  dataKey="score"
+                  stroke="#06b6d4"
+                  fill="#06b6d4"
+                  fillOpacity={0.25}
+                  isAnimationActive={false}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-500 py-6">
+            The radar appears when all four dimensions have sufficient evidence.
+            Unknown dimensions are not zero.
+          </p>
+        )}
+        <dl className="grid grid-cols-2 gap-3 mt-4">
+          {Object.entries(names).map(([key, label]) => (
+            <div key={key} className="border border-slate-800 p-3 rounded-xl">
+              <dt className="text-xs text-slate-500">{label}</dt>
+              <dd className="text-sm mt-1">
+                {dimensions[key]?.level == null
+                  ? "Unscored"
+                  : `${dimensions[key].level}/4`}
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {assessment?.roleFit && (
+          <div className="mt-4 border-t border-slate-800 pt-3">
+            <h3 className="text-sm font-semibold">Role fit</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              {assessment.roleFit.rationale}
+            </p>
+          </div>
+        )}
+        <DecisionReview verification={assessment?.verification} />
+        <button
+          className="button secondary w-full justify-center mt-4"
+          disabled={!finished || !canWrite || exporting}
+          onClick={onExportDossier}
+        >
+          {exporting ? "Generating PDF…" : "Download evidence dossier"}
+        </button>
+      </section>
+      <section className="panel">
+        <h2 className="font-bold">Reviewer decision</h2>
+        <p className="text-xs text-slate-400 mt-2">
+          Your decision is recorded separately from the automated assessment.
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onDecision(decision, rationale);
+          }}
+        >
+          <label className="field mt-4">
+            Decision
+            <select
+              value={decision}
+              onChange={(e) => setDecision(e.target.value)}
+              disabled={!canWrite || !finished}
+            >
+              <option value="review">Review</option>
+              {workflow === "recruiting" ? (
+                <>
+                  <option value="advance">Advance</option>
+                  <option value="decline">Decline</option>
+                </>
+              ) : (
+                <>
+                  <option value="award">Award</option>
+                  <option value="no-award">No award</option>
+                </>
+              )}
+            </select>
+          </label>
+          <label className="field mt-3">
+            Rationale
+            <textarea
+              required
+              minLength={10}
+              maxLength={5000}
+              rows={4}
+              value={rationale}
+              onChange={(e) => setRationale(e.target.value)}
+              disabled={!canWrite || !finished}
+            />
+          </label>
+          <button
+            className="button mt-3"
+            disabled={!canWrite || !finished || busy}
+          >
+            Record decision
+          </button>
+        </form>
+        <div className="mt-4 space-y-3">
+          {decisions.map((item) => (
+            <article
+              key={item.id}
+              className="border-t border-slate-800 pt-3 text-xs"
+            >
+              <strong className="text-cyan-300">{item.decision}</strong>
+              <p className="text-slate-400 mt-1">{item.rationale}</p>
+              <p className="text-slate-500 mt-1">
+                {new Date(item.created_at).toLocaleString()}
+              </p>
+            </article>
+          ))}
+        </div>
+      </section>
+    </aside>
+  );
 }

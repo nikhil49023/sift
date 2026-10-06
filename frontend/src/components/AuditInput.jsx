@@ -4,7 +4,7 @@ const stages = ["scout", "forensics", "judge", "synthesizer"];
 const labels = [
   "Collect evidence",
   "Inspect code & history",
-  "Evaluate JEV rubric",
+  "Evaluate SIFT rubric",
   "Assemble assessment",
 ];
 export default function AuditInput({

@@ -9,6 +9,7 @@ import {
   Repository,
   RUBRIC_VERSION,
   PROMPT_VERSION,
+  JEV_VERIFICATION_VERSION,
 } from "@sift/contracts";
 import { pool, transaction } from "./db.ts";
 import { config, local } from "./config.ts";
@@ -407,8 +408,18 @@ app.get("/api/candidates", async (req, res) => {
     config.RANKINGS_ENABLED === "true"
       ? (
           await pool.query(
-            `SELECT c.id,a.assessment FROM candidates c JOIN LATERAL(SELECT * FROM audits WHERE candidate_id=c.id AND org_id=c.org_id ORDER BY created_at DESC LIMIT 1) a ON true WHERE c.org_id=$1 AND c.cohort_id=$2 AND a.assessment->>'rankable'='true' AND a.assessment->'versions'->>'rubric'=$3 AND a.assessment->'versions'->>'provider'='groq' AND a.assessment->'versions'->>'model'=$4 AND a.assessment->'versions'->>'prompt'=$5 ORDER BY (a.assessment->>'overallScore')::numeric DESC,c.id`,
-            [org, cohort, RUBRIC_VERSION, config.GROQ_MODEL, PROMPT_VERSION],
+            `SELECT c.id,a.assessment FROM candidates c JOIN LATERAL(SELECT * FROM audits WHERE candidate_id=c.id AND org_id=c.org_id ORDER BY created_at DESC LIMIT 1) a ON true WHERE c.org_id=$1 AND c.cohort_id=$2 AND a.assessment->>'rankable'='true' AND a.assessment->'versions'->>'rubric'=$3 AND a.assessment->'versions'->>'provider'='groq' AND a.assessment->'versions'->>'model'=$4 AND a.assessment->'versions'->>'prompt'=$5 AND a.assessment->'versions'->>'decisionProvider'=$6 AND ($6='none' OR (a.assessment->'versions'->>'decisionModel'=$7 AND a.assessment->'versions'->>'decisionVersion'=$8 AND a.assessment->'versions'->>'decisionThreshold'=$9 AND a.assessment->'verification'->>'engineeringSupported'='true')) ORDER BY (a.assessment->>'overallScore')::numeric DESC,c.id`,
+            [
+              org,
+              cohort,
+              RUBRIC_VERSION,
+              config.GROQ_MODEL,
+              PROMPT_VERSION,
+              config.DECISION_PROVIDER,
+              config.TYPESAFE_MODEL,
+              JEV_VERIFICATION_VERSION,
+              String(config.JEV_SUPPORT_THRESHOLD),
+            ],
           )
         ).rows
       : [];

@@ -4,7 +4,13 @@ import { config } from "./config.ts";
 import { STAGES, type Snapshot, type Evidence } from "@sift/contracts";
 import { ingest, makeEvidence, excludedPath } from "./ingestion.ts";
 import { inspect } from "./forensics.ts";
-import { judge, synthesize, incompleteJudgment } from "./jev/index.ts";
+import {
+  proposeJudgment,
+  isCurrentProposal,
+  synthesize,
+  incompleteJudgment,
+} from "./jev/index.ts";
+import { reviewProposal, withholdProposal } from "./jev/review.ts";
 import { generateReport } from "./reports.ts";
 import { importDataset } from "./datasets.ts";
 import { ProviderError } from "./github.ts";
@@ -215,8 +221,23 @@ export async function runAudit(id: string, orgId: string) {
             [id, orgId, JSON.stringify(findings)],
           );
         } else if (stage === "judge") {
-          const judgment = await judge(
-            await loadSnapshots(),
+          const snapshots = await loadSnapshots();
+          const proposal = isCurrentProposal(
+            row.judgment,
+            snapshots.flatMap((s) => s.evidence),
+          )
+            ? row.judgment
+            : await proposeJudgment(snapshots, row.findings, row.input);
+          // Save before calling Jev: a quota retry reuses the validated Groq
+          // proposal instead of paying to generate it again.
+          await pool.query(
+            "UPDATE audits SET judgment=$3 WHERE id=$1 AND org_id=$2 AND cancelled=false",
+            [id, orgId, proposal],
+          );
+          if (await cancelled()) return;
+          const judgment = await reviewProposal(
+            proposal,
+            snapshots,
             row.findings,
             row.input,
           );
@@ -341,9 +362,14 @@ export async function recordJobFailure(
       const assessment = synthesize(
         snapshots,
         row.findings,
-        incompleteJudgment(
-          `Evaluation failed after bounded retries: ${error.message}`,
-        ),
+        row.judgment?.generation
+          ? withholdProposal(
+              row.judgment,
+              `Evaluation failed: ${error.message}. Proposed scores are withheld.`,
+            )
+          : incompleteJudgment(
+              `Evaluation failed after bounded retries: ${error.message}`,
+            ),
       );
       await pool.query(
         "UPDATE audits SET status='partial',assessment=$4,error=$3,stages=CASE WHEN stage IS NULL THEN stages ELSE jsonb_set(stages,ARRAY[stage],'{\"status\":\"failed\"}'::jsonb) END,updated_at=now() WHERE id=$1 AND org_id=$2 AND cancelled=false",

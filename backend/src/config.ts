@@ -20,18 +20,26 @@ const Env = z.object({
   GITHUB_TOKEN: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default("openai/gpt-oss-120b"),
-  JEV_MAX_EVIDENCE_CHARS: z.coerce
+  // Accept the old names during the configuration transition; these budgets
+  // describe Groq's proposal, not TypeSafe Jev's decision API.
+  JUDGE_MAX_EVIDENCE_CHARS: z.preprocess(
+    (value) => value ?? process.env.JEV_MAX_EVIDENCE_CHARS,
+    z.coerce.number().int().min(1000).max(80000).default(16000),
+  ),
+  JUDGE_MAX_OUTPUT_TOKENS: z.preprocess(
+    (value) => value ?? process.env.JEV_MAX_OUTPUT_TOKENS,
+    z.coerce.number().int().min(1024).max(16384).default(4096),
+  ),
+  DECISION_PROVIDER: z.enum(["none", "typesafe"]).default("none"),
+  TYPESAFE_API_KEY: z.string().optional(),
+  TYPESAFE_MODEL: z.string().default("jev-latest"),
+  JEV_SUPPORT_THRESHOLD: z.coerce.number().min(0.5).max(1).default(0.8),
+  JEV_MAX_REQUEST_CHARS: z.coerce
     .number()
     .int()
     .min(1000)
-    .max(80000)
-    .default(16000),
-  JEV_MAX_OUTPUT_TOKENS: z.coerce
-    .number()
-    .int()
-    .min(1024)
-    .max(16384)
-    .default(4096),
+    .max(160000)
+    .default(64000),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   STORAGE_BUCKET: z.string().default("sift-private"),
   LOCAL_ORG_ID: z.uuid().default("00000000-0000-4000-8000-000000000001"),

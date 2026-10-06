@@ -7,6 +7,10 @@ envVarGroups:
         value: supabase
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
+      - key: DECISION_PROVIDER
+        value: none
+      - key: TYPESAFE_MODEL
+        value: jev-latest
       - key: STORAGE_BUCKET
         value: sift-private
       - key: RANKINGS_ENABLED

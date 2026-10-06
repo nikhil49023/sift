@@ -1,8 +1,11 @@
-import React from 'react';
-import { Scale, Database, ShieldAlert, Users, BookOpen } from 'lucide-react';
+import React from "react";
+import { Scale, Database, ShieldAlert, Users, BookOpen } from "lucide-react";
 
-export default function Navbar({ candidateCount = 0, flaggedCount = 0, onOpenJuryPlaybook }) {
-
+export default function Navbar({
+  candidateCount = 0,
+  flaggedCount = 0,
+  onOpenJuryPlaybook,
+}) {
   return (
     <header className="border-b border-slate-800 bg-[#0E131F]/90 backdrop-blur sticky top-0 z-50 px-6 py-4 flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -11,12 +14,16 @@ export default function Navbar({ candidateCount = 0, flaggedCount = 0, onOpenJur
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <span className="font-extrabold text-xl tracking-wider text-white">SIFT</span>
+            <span className="font-extrabold text-xl tracking-wider text-white">
+              SIFT
+            </span>
             <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
-              JEV Engine v1.0
+              Evidence Review
             </span>
           </div>
-          <p className="text-xs text-slate-400">Code forensics & evidence-backed review</p>
+          <p className="text-xs text-slate-400">
+            Code forensics & evidence-backed review
+          </p>
         </div>
       </div>
 
@@ -26,24 +33,36 @@ export default function Navbar({ candidateCount = 0, flaggedCount = 0, onOpenJur
           <div className="flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-xl border border-slate-800">
             <Database className="w-4 h-4 text-cyan-400" />
             <div>
-              <span className="text-slate-500 block text-[10px]">EVIDENCE SOURCE</span>
-              <span className="font-bold text-slate-200">Pinned GitHub snapshots</span>
+              <span className="text-slate-500 block text-[10px]">
+                EVIDENCE SOURCE
+              </span>
+              <span className="font-bold text-slate-200">
+                Pinned GitHub snapshots
+              </span>
             </div>
           </div>
           <div className="h-6 w-px bg-slate-800" />
           <div className="flex items-center gap-2">
             <Users className="w-4 h-4 text-slate-500" />
             <div>
-              <span className="text-slate-500 block text-[10px]">COHORT SUBMISSIONS</span>
-              <span className="font-bold text-slate-200 text-sm">{candidateCount}</span>
+              <span className="text-slate-500 block text-[10px]">
+                COHORT SUBMISSIONS
+              </span>
+              <span className="font-bold text-slate-200 text-sm">
+                {candidateCount}
+              </span>
             </div>
           </div>
           <div className="h-6 w-px bg-slate-800" />
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-rose-400" />
             <div>
-              <span className="text-slate-500 block text-[10px]">ON THIS PAGE</span>
-              <span className="font-bold text-amber-300 text-sm">{flaggedCount} require review</span>
+              <span className="text-slate-500 block text-[10px]">
+                ON THIS PAGE
+              </span>
+              <span className="font-bold text-amber-300 text-sm">
+                {flaggedCount} require review
+              </span>
             </div>
           </div>
         </div>

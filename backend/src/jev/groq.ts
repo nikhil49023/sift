@@ -94,7 +94,7 @@ export function createGroqCompletion(
           body: JSON.stringify({
             model,
             temperature: 0,
-            max_completion_tokens: config.JEV_MAX_OUTPUT_TOKENS,
+            max_completion_tokens: config.JUDGE_MAX_OUTPUT_TOKENS,
             messages: [
               {
                 role: "system",
@@ -105,7 +105,7 @@ export function createGroqCompletion(
             response_format: {
               type: "json_schema",
               json_schema: {
-                name: "sift_jev_judgment",
+                name: "sift_rubric_judgment",
                 strict: true,
                 schema: GROQ_JUDGMENT_SCHEMA,
               },
@@ -154,14 +154,14 @@ export function createGroqCompletion(
     const choice = result.choices?.[0];
     if (choice?.finish_reason === "length")
       throw new UnrecoverableError(
-        "Groq output was truncated; reduce the evidence packet or increase JEV_MAX_OUTPUT_TOKENS",
+        "Groq output was truncated; reduce the evidence packet or increase JUDGE_MAX_OUTPUT_TOKENS",
       );
     return {
       text:
         typeof choice?.message?.content === "string"
           ? choice.message.content
           : "",
-      model: result.model || model,
+      model: typeof result.model === "string" ? result.model : model,
       inputTokens: result.usage?.prompt_tokens,
       outputTokens: result.usage?.completion_tokens,
       totalTokens: result.usage?.total_tokens,

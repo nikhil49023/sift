@@ -10,7 +10,17 @@ import { rm, mkdir, writeFile, access } from "node:fs/promises";
 import { dirname } from "node:path";
 import { runAudit, recordJobFailure } from "../src/worker.ts";
 import { UnrecoverableError } from "bullmq";
-import { RUBRIC_VERSION, PROMPT_VERSION } from "@sift/contracts";
+import {
+  RUBRIC_VERSION,
+  PROMPT_VERSION,
+  JEV_VERIFICATION_VERSION,
+  DIMENSIONS,
+  AuditInput,
+  type Snapshot,
+} from "@sift/contracts";
+import { makeEvidence } from "../src/ingestion.ts";
+import { proposeJudgment, incompleteJudgment } from "../src/jev/index.ts";
+import { ProviderError } from "../src/github.ts";
 import { purgeDeletedOrganizations } from "../src/retention.ts";
 test("dossier is a real PDF with a provenance section", async () => {
   const pdf = await createPdf({
@@ -40,6 +50,9 @@ test(
     let cohortId: string | undefined, reportId: string | undefined;
     const audits: string[] = [];
     const previousRankingFlag = config.RANKINGS_ENABLED;
+    const previousDecisionProvider = config.DECISION_PROVIDER;
+    const previousTypesafeKey = config.TYPESAFE_API_KEY;
+    const originalFetch = globalThis.fetch;
     const request = async (
       path: string,
       body?: unknown,
@@ -131,12 +144,14 @@ test(
         prompt: PROMPT_VERSION,
         provider: "groq",
         model: config.GROQ_MODEL,
+        decisionProvider: config.DECISION_PROVIDER,
       };
       for (const [versions, expectedRank] of [
         [currentVersions, 1],
         [{ ...currentVersions, provider: "gemini" }, null],
         [{ ...currentVersions, model: "other-model" }, null],
         [{ ...currentVersions, prompt: "older-prompt" }, null],
+        [{ ...currentVersions, decisionProvider: "typesafe" }, null],
       ] as const) {
         await pool.query("UPDATE audits SET assessment=$2 WHERE id=$1", [
           job.id,
@@ -149,6 +164,42 @@ test(
         assert.equal(listing.rankedCohortSize, expectedRank === 1 ? 1 : 0);
       }
       config.RANKINGS_ENABLED = previousRankingFlag;
+      config.DECISION_PROVIDER = "typesafe";
+      const decisionVersions = {
+        ...currentVersions,
+        decisionProvider: "typesafe",
+        decisionModel: config.TYPESAFE_MODEL,
+        decisionVersion: JEV_VERIFICATION_VERSION,
+        decisionThreshold: config.JEV_SUPPORT_THRESHOLD,
+      };
+      for (const [versions, supported, expectedRank] of [
+        [decisionVersions, true, 1],
+        [
+          { ...decisionVersions, decisionModel: "different-resolved-version" },
+          true,
+          null,
+        ],
+        [{ ...decisionVersions, decisionVersion: "obsolete" }, true, null],
+        [{ ...decisionVersions, decisionThreshold: 0.99 }, true, null],
+        [decisionVersions, false, null],
+      ] as const) {
+        await pool.query("UPDATE audits SET assessment=$2 WHERE id=$1", [
+          job.id,
+          {
+            rankable: true,
+            overallScore: 50,
+            versions,
+            verification: { engineeringSupported: supported },
+          },
+        ]);
+        config.RANKINGS_ENABLED = "true";
+        const listing = await (
+          await request(`/api/candidates?cohortId=${cohortId}`)
+        ).json();
+        assert.equal(listing.candidates[0].rank, expectedRank);
+      }
+      config.RANKINGS_ENABLED = previousRankingFlag;
+      config.DECISION_PROVIDER = previousDecisionProvider;
       await pool.query(
         "UPDATE memberships SET role='viewer' WHERE org_id=$1 AND user_id=$2",
         [config.LOCAL_ORG_ID, config.LOCAL_USER_ID],
@@ -218,6 +269,136 @@ test(
         ).rowCount,
         2,
       );
+      const sha = "b".repeat(40);
+      const code = makeEvidence(
+        "test/repo",
+        sha,
+        "code",
+        "tests/app.test.ts",
+        "assert.equal(1, 1);",
+        "https://github.com/test/repo",
+      );
+      const history = makeEvidence(
+        "test/repo",
+        sha,
+        "commit",
+        "history.json",
+        "Synthetic incremental history",
+        "https://github.com/test/repo",
+      );
+      const snapshot: Snapshot = {
+        repository: "test/repo",
+        sha,
+        evidence: [code, history],
+        coverage: {
+          complete: true,
+          limitations: [],
+          filesAnalyzed: 1,
+          commitsAnalyzed: 1,
+          excludedFiles: 0,
+        },
+        commits: [],
+        metadata: {},
+        blame: {},
+      };
+      const raw = incompleteJudgment("Synthetic checkpoint fixture");
+      for (const k of DIMENSIONS)
+        raw.dimensions[k] = {
+          level: 2,
+          rationale: "Synthetic rationale",
+          citations:
+            k === "collaborationHygiene"
+              ? [{ evidenceId: history.id, excerpt: history.content }]
+              : [
+                  {
+                    evidenceId: code.id,
+                    excerpt: code.content,
+                    startLine: 1,
+                    endLine: 1,
+                  },
+                ],
+        };
+      const proposal = await proposeJudgment(
+        [snapshot],
+        [],
+        AuditInput.parse(input),
+        async () => ({ text: JSON.stringify(raw), model: config.GROQ_MODEL }),
+      );
+      const { evidence, ...savedSnapshot } = snapshot;
+      for (const item of evidence)
+        await pool.query(
+          "INSERT INTO evidence(id,audit_id,org_id,payload) VALUES($1,$2,$3,$4)",
+          [item.id, job.id, config.LOCAL_ORG_ID, item],
+        );
+      await pool.query(
+        "UPDATE audits SET status='running',judgment=$2,snapshots=$3,stages=$4 WHERE id=$1",
+        [
+          job.id,
+          proposal,
+          JSON.stringify([savedSnapshot]),
+          {
+            scout: { status: "completed" },
+            forensics: { status: "completed" },
+          },
+        ],
+      );
+      config.DECISION_PROVIDER = "typesafe";
+      config.TYPESAFE_API_KEY = "synthetic-key";
+      let jevCalls = 0;
+      globalThis.fetch = async (url, options) => {
+        if (String(url).startsWith("https://api.")) {
+          assert.equal(
+            url,
+            "https://api.typesafe.ai/v1/systemone",
+            "Groq must not regenerate a valid checkpoint",
+          );
+          jevCalls++;
+          if (jevCalls === 1)
+            return new Response("synthetic quota", {
+              status: 429,
+              headers: { "retry-after": "1" },
+            });
+          const body = JSON.parse(String(options?.body));
+          return new Response(
+            JSON.stringify({
+              model: "jev-synthetic-version",
+              answers: Object.fromEntries(
+                Object.keys(body.questions).map((k) => [
+                  k,
+                  { type: "noul", noul: 0.95 },
+                ]),
+              ),
+              usage: { input_tokens: 100, output_tokens: 9 },
+            }),
+          );
+        }
+        return originalFetch(url, options);
+      };
+      await assert.rejects(
+        runAudit(job.id, config.LOCAL_ORG_ID),
+        ProviderError,
+      );
+      assert.equal(
+        (await pool.query("SELECT judgment FROM audits WHERE id=$1", [job.id]))
+          .rows[0].judgment.generation.model,
+        config.GROQ_MODEL,
+      );
+      await runAudit(job.id, config.LOCAL_ORG_ID);
+      const verified = (
+        await pool.query("SELECT status,assessment FROM audits WHERE id=$1", [
+          job.id,
+        ])
+      ).rows[0];
+      assert.equal(jevCalls, 2);
+      assert.equal(verified.status, "completed");
+      assert.equal(verified.assessment.overallScore, 50);
+      assert.equal(
+        verified.assessment.versions.decisionModel,
+        "jev-synthetic-version",
+      );
+      globalThis.fetch = originalFetch;
+      config.DECISION_PROVIDER = previousDecisionProvider;
+      config.TYPESAFE_API_KEY = previousTypesafeKey;
       await pool.query(
         "UPDATE audits SET status='running',stage='judge' WHERE id=$1",
         [job.id],
@@ -253,6 +434,9 @@ test(
         "cancelled",
       );
     } finally {
+      globalThis.fetch = originalFetch;
+      config.DECISION_PROVIDER = previousDecisionProvider;
+      config.TYPESAFE_API_KEY = previousTypesafeKey;
       config.RANKINGS_ENABLED = previousRankingFlag;
       await pool.query(
         "UPDATE memberships SET role='admin' WHERE org_id=$1 AND user_id=$2",

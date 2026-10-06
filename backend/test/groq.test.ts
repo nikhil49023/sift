@@ -117,7 +117,7 @@ test("Groq strict response preserves required nullable citation bounds and exist
       calls++;
       assert.equal(body.model, model);
       assert.equal(body.response_format.json_schema.strict, true);
-      assert.equal(body.max_completion_tokens, config.JEV_MAX_OUTPUT_TOKENS);
+      assert.equal(body.max_completion_tokens, config.JUDGE_MAX_OUTPUT_TOKENS);
       assert.equal(body.tools, undefined);
       assert.equal(body.stream, undefined);
       const schema = body.response_format.json_schema.schema;
@@ -247,7 +247,7 @@ test("model evidence packets stay within configured bounds and validate only sup
           packet.evidence.reduce(
             (n: number, e: any) => n + e.content.length,
             0,
-          ) <= config.JEV_MAX_EVIDENCE_CHARS,
+          ) <= config.JUDGE_MAX_EVIDENCE_CHARS,
         );
         assert.ok(!packet.evidence.some((e: any) => e.id === oversized.id));
         assert.deepEqual(packet.packetCoverage, { selected: 2, total: 3 });

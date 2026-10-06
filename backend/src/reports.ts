@@ -74,7 +74,25 @@ export function createPdf(manifest: any): Promise<Buffer> {
       finding.observations.forEach((line: string) => document.text(line));
       document.text(`Coverage: ${finding.coverage}`).moveDown();
     }
-    heading("JEV dimensions");
+    const verification = manifest.assessment?.verification;
+    heading("Decision-model review");
+    if (!verification) document.text("Not recorded for this audit.");
+    else {
+      document.text(
+        `TypeSafe Jev: ${verification.status}${verification.model ? ` / ${verification.model}` : ""}`,
+      );
+      if (verification.reason) document.text(verification.reason);
+      if (Object.keys(verification.checks || {}).length) {
+        document.text(
+          `Provisional support threshold: ${verification.threshold}. Probabilities are model estimates, not proof of factual correctness.`,
+        );
+        for (const [name, value] of Object.entries(verification.checks))
+          document.text(
+            `${name}: ${(Number(value) * 100).toFixed(1)}% support probability`,
+          );
+      }
+    }
+    heading("SIFT rubric dimensions");
     for (const [name, value] of Object.entries(
       manifest.assessment?.dimensions || {},
     ) as [string, any][]) {
@@ -95,7 +113,9 @@ export function createPdf(manifest: any): Promise<Buffer> {
       heading("Role fit");
       document.text(manifest.assessment.roleFit.rationale);
       for (const citation of manifest.assessment.roleFit.citations || []) {
-        document.text(`[${citation.evidenceId}] ${citation.startLine ? `lines ${citation.startLine}-${citation.endLine}` : ''}\n${citation.excerpt}`);
+        document.text(
+          `[${citation.evidenceId}] ${citation.startLine ? `lines ${citation.startLine}-${citation.endLine}` : ""}\n${citation.excerpt}`,
+        );
       }
     }
     heading("Source references");

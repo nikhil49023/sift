@@ -13,6 +13,8 @@ import {
 } from "@sift/contracts";
 import { config } from "../config.ts";
 import { createGroqCompletion, type JudgeCompletion } from "./groq.ts";
+import { reviewProposal } from "./review.ts";
+import type { JevVerifier } from "./typesafe.ts";
 
 export function validateJudgment(
   value: unknown,
@@ -110,7 +112,7 @@ export function incompleteJudgment(reason: string): Judgment {
     },
   };
 }
-export async function judge(
+export async function proposeJudgment(
   snapshots: Snapshot[],
   findings: Finding[],
   input: AuditSubmission,
@@ -118,7 +120,7 @@ export async function judge(
 ): Promise<Judgment> {
   if (!completion && !config.GROQ_API_KEY)
     return incompleteJudgment(
-      "JEV evaluation is unavailable: GROQ_API_KEY is not configured. Forensic observations remain available.",
+      "Groq evaluation is unavailable: GROQ_API_KEY is not configured. Forensic observations remain available.",
     );
   const all = snapshots.flatMap((s) => s.evidence);
   const priority = (e: Evidence) =>
@@ -135,7 +137,7 @@ export async function judge(
     // Include whole evidence objects or skip them; excerpt validation always uses the same captured content.
     if (
       e.content.length > 20000 ||
-      bytes + e.content.length > config.JEV_MAX_EVIDENCE_CHARS
+      bytes + e.content.length > config.JUDGE_MAX_EVIDENCE_CHARS
     )
       continue;
     packet.push(e);
@@ -181,13 +183,69 @@ export async function judge(
       );
       if (!input.jobDescription && result.roleFit)
         throw new Error("Role fit requires a job description");
-      return result;
+      return {
+        ...result,
+        generation: {
+          provider: "groq",
+          model: response.model,
+          requestedModel: config.GROQ_MODEL,
+          prompt: PROMPT_VERSION,
+          rubric: RUBRIC_VERSION,
+          evidenceBudget: config.JUDGE_MAX_EVIDENCE_CHARS,
+          outputBudget: config.JUDGE_MAX_OUTPUT_TOKENS,
+        },
+      };
     } catch (error) {
       correction = `The previous response was rejected: ${error instanceof Error ? error.message : "invalid output"}. Return a corrected response using only packet evidence.`;
     }
   }
   return incompleteJudgment(
-    "JEV output failed evidence/schema verification after one correction attempt. No score was published.",
+    "Groq output failed evidence/schema verification after one correction attempt. No score was published.",
+  );
+}
+export function isCurrentProposal(
+  proposal: Judgment | null,
+  evidence: Evidence[],
+) {
+  const generation = proposal?.generation;
+  if (
+    !proposal ||
+    !generation ||
+    generation.provider !== "groq" ||
+    generation.requestedModel !== config.GROQ_MODEL ||
+    generation.prompt !== PROMPT_VERSION ||
+    generation.rubric !== RUBRIC_VERSION ||
+    generation.evidenceBudget !== config.JUDGE_MAX_EVIDENCE_CHARS ||
+    generation.outputBudget !== config.JUDGE_MAX_OUTPUT_TOKENS
+  )
+    return false;
+  try {
+    validateJudgment(
+      {
+        dimensions: proposal.dimensions,
+        summary: proposal.summary,
+        roleFit: proposal.roleFit,
+      },
+      evidence,
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+export async function judge(
+  snapshots: Snapshot[],
+  findings: Finding[],
+  input: AuditSubmission,
+  completion?: JudgeCompletion,
+  verifier?: JevVerifier,
+) {
+  return reviewProposal(
+    await proposeJudgment(snapshots, findings, input, completion),
+    snapshots,
+    findings,
+    input,
+    verifier,
   );
 }
 export function synthesize(
@@ -198,7 +256,10 @@ export function synthesize(
   const complete =
     snapshots.length > 0 &&
     snapshots.every((s) => s.coverage.complete) &&
-    DIMENSIONS.every((k) => judgment.dimensions[k].level !== null);
+    DIMENSIONS.every((k) => judgment.dimensions[k].level !== null) &&
+    (!judgment.verification ||
+      judgment.verification.status === "disabled" ||
+      judgment.verification.engineeringSupported);
   const overallScore = complete
     ? Math.round(
         DIMENSIONS.reduce(
@@ -229,6 +290,7 @@ export function synthesize(
     riskLevel,
     summary: judgment.summary,
     roleFit: judgment.roleFit,
+    verification: judgment.verification || null,
     dimensions: judgment.dimensions,
     citations: evidence
       .filter((e) => citationIds.has(e.id))
@@ -265,8 +327,17 @@ export function synthesize(
       rules: RULE_VERSION,
       rubric: RUBRIC_VERSION,
       prompt: PROMPT_VERSION,
-      provider: "groq",
-      model: config.GROQ_API_KEY ? config.GROQ_MODEL : null,
+      provider: judgment.generation?.provider || null,
+      model: judgment.generation?.model || null,
+      decisionProvider:
+        judgment.verification?.status === "disabled"
+          ? "none"
+          : judgment.verification
+            ? "typesafe"
+            : null,
+      decisionModel: judgment.verification?.model || null,
+      decisionVersion: judgment.verification?.version || null,
+      decisionThreshold: judgment.verification?.threshold ?? null,
     },
     limitations: [
       "No submitted code was executed; CI outcomes are reported evidence.",

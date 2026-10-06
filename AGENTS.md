@@ -48,11 +48,11 @@ Both developers run AI coding assistants that must strictly uphold this commit p
   3. Passenger / Ghost Contributor Filter (Per-author git churn & blame).
   4. Hollow AI-Slop & Mock Detector (Empty stubs, hardcoded returns, cyclomatic complexity).
   5. License Stripping & Plagiarism Fingerprint.
-* Persisted agent stages & JEV model orchestration using Groq (GPT-OSS 120B).
-* Express.js backend services & Supabase/SQLite persistence.
+* Persisted agent stages, Groq rubric proposals (GPT-OSS 120B), and opt-in TypeSafe Jev verification.
+* Express.js backend services & Supabase/PostgreSQL persistence.
 
-### Subsystem B: JEV Rubric Engine, Audit Dossier & Dashboard UX (Harika / `[SENTINEL]`)
-* JEV (*Judgement, Evaluation & Verification*) Multi-Dimensional Rubric Engine.
+### Subsystem B: Rubric, TypeSafe Jev Review, Audit Dossier & Dashboard UX (Harika / `[SENTINEL]`)
+* SIFT multi-dimensional rubric and optional TypeSafe AI Jev evidence-support review. Jev is a separate decision model, not an acronym for the rubric.
 * Sentinel verification judge prompt harnesses & anti-hallucination citation checks.
 * Explainable jury audit report & downloadable verified candidate dossier (PDF export).
 * Interactive Recruiter / Jury Dashboard (Leaderboard, radar charts, candidate deep-dive modal, anti-cheat flags).
