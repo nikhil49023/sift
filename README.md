@@ -15,7 +15,7 @@ SIFT collects public GitHub repository snapshots, inspects code and history, val
 
 The backend performs static inspection of Git objects and ASTs. It never installs dependencies or runs submitted code. CI results are reported from GitHub. JavaScript/TypeScript and Python have AST checks; other languages have limited inspection. Large repositories, capped API history, and unavailable upstreams produce explicit limitations. JEV receives a bounded evidence packet, so reviewers must inspect whether its citations support its reasoning.
 
-Rankings remain disabled until calibration is approved. Dataset imports remain disabled until usage rights are verified. Without a Gemini key, forensics still runs and the result remains unscored.
+Rankings remain disabled until calibration is approved. Dataset imports remain disabled until usage rights are verified. The judge uses Groq with `openai/gpt-oss-120b` and strict JSON output. Without a Groq key, forensics still runs and the result remains unscored.
 
 ## Run locally
 
@@ -28,7 +28,7 @@ docker compose up -d
 npm run migrate
 ```
 
-Set `GITHUB_TOKEN` and `GEMINI_API_KEY` in the ignored root `.env` for authenticated ingestion and model evaluation. Never put provider secrets in `VITE_` variables. The development server and worker load the root `.env`.
+Set `GITHUB_TOKEN` and `GROQ_API_KEY` in the ignored root `.env` for authenticated ingestion and model evaluation. Never put provider secrets in `VITE_` variables. The development server and worker load the root `.env`.
 
 Start these in separate terminals from the repository root:
 
@@ -44,7 +44,7 @@ For integration checks, stop the development worker first so it cannot consume s
 
 ```bash
 npm run build
-INTEGRATION_TESTS=true npm test
+GROQ_API_KEY= INTEGRATION_TESTS=true npm test
 npm audit --audit-level=high
 ```
 

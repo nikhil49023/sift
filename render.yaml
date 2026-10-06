@@ -5,8 +5,8 @@ envVarGroups:
         value: production
       - key: AUTH_MODE
         value: supabase
-      - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
       - key: STORAGE_BUCKET
         value: sift-private
       - key: RANKINGS_ENABLED

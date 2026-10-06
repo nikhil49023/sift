@@ -48,7 +48,7 @@ Both developers run AI coding assistants that must strictly uphold this commit p
   3. Passenger / Ghost Contributor Filter (Per-author git churn & blame).
   4. Hollow AI-Slop & Mock Detector (Empty stubs, hardcoded returns, cyclomatic complexity).
   5. License Stripping & Plagiarism Fingerprint.
-* Agent DAG state machine & tool orchestration using Gemini 2.5.
+* Persisted agent stages & JEV model orchestration using Groq (GPT-OSS 120B).
 * Express.js backend services & Supabase/SQLite persistence.
 
 ### Subsystem B: JEV Rubric Engine, Audit Dossier & Dashboard UX (Harika / `[SENTINEL]`)

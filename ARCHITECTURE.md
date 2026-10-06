@@ -12,7 +12,7 @@ flowchart TD
     Queue --> Worker[Render worker]
     Worker --> Scout[Scout: pinned Git and GitHub evidence]
     Scout --> Forensics[Forensics: five deterministic pillars]
-    Forensics --> Judge[JEV: bounded Gemini packet and citation validation]
+    Forensics --> Judge[JEV: bounded Groq packet and citation validation]
     Judge --> Synth[Synthesizer: scores, coverage and review flags]
     Synth --> DB
     Worker --> Storage[Private Supabase PDF storage]
@@ -43,9 +43,9 @@ Timeline checks distinguish author and committer dates and limited push-event ob
 | Testing and verification | 25% |
 | Collaboration hygiene | 20% |
 
-Each dimension has anchored levels 0–4 or null for insufficient evidence. The model receives untrusted repository text as data, has no execution tools, and must return structured output. The validator checks evidence IDs, verbatim excerpts, line bounds, and appropriate source kinds. One corrective response is allowed before withholding the judgment. Citation correspondence is verified mechanically; semantic support still requires reviewer judgment.
+Each dimension has anchored levels 0–4 or null for insufficient evidence. Groq serves `openai/gpt-oss-120b` with strict JSON output. The model receives untrusted repository text as data, has no execution tools, and must return structured output. Citation line bounds are required on the wire and nullable for non-code sources, then normalized for application validation. The validator checks evidence IDs, verbatim excerpts, line bounds, and appropriate source kinds. One corrective response is allowed before withholding the judgment. Citation correspondence is verified mechanically; semantic support still requires reviewer judgment.
 
-The weighted overall score is available only when all dimensions are scored and acquisition coverage is complete. Forensic risk is separate from technical quality and role fit. Rankings require an explicit rollout flag and compare the latest eligible audit only within one cohort and rubric version. Reviewers make the final workflow-specific decision and record a rationale.
+The weighted overall score is available only when all dimensions are scored and acquisition coverage is complete. Forensic risk is separate from technical quality and role fit. Rankings require an explicit rollout flag and compare the latest eligible audit only within one cohort and matching rubric, prompt, provider, and model versions. Reviewers make the final workflow-specific decision and record a rationale.
 
 ## Tenant boundaries and lifecycle
 

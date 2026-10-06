@@ -5,7 +5,7 @@ export const DIMENSIONS = ['systemsRigor', 'algorithmicDepth', 'testingVerificat
 export const WEIGHTS = { systemsRigor: .30, algorithmicDepth: .25, testingVerification: .25, collaborationHygiene: .20 };
 export const RULE_VERSION = 'forensics-v1';
 export const RUBRIC_VERSION = 'jev-v1';
-export const PROMPT_VERSION = 'judge-v1';
+export const PROMPT_VERSION = 'judge-v2';
 export const Repository = z.string().trim().transform(value => value.replace(/^https:\/\/github\.com\//i, '').replace(/\/$/, '').replace(/\.git$/, '')).pipe(z.string().regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9_.-]{1,100}$/).refine(s => !s.endsWith('/.') && !s.endsWith('/..'), 'Invalid repository'));
 export const AuditInput = z.object({
   workflow: z.enum(['hackathon', 'recruiting']), cohortId: z.uuid(),

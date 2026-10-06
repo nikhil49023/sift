@@ -8,7 +8,9 @@ import { config } from "../src/config.ts";
 import { createPdf, generateReport, localReportPath } from "../src/reports.ts";
 import { rm, mkdir, writeFile, access } from "node:fs/promises";
 import { dirname } from "node:path";
-import { runAudit } from "../src/worker.ts";
+import { runAudit, recordJobFailure } from "../src/worker.ts";
+import { UnrecoverableError } from "bullmq";
+import { RUBRIC_VERSION, PROMPT_VERSION } from "@sift/contracts";
 import { purgeDeletedOrganizations } from "../src/retention.ts";
 test("dossier is a real PDF with a provenance section", async () => {
   const pdf = await createPdf({
@@ -37,6 +39,7 @@ test(
       foreignCohort = randomUUID();
     let cohortId: string | undefined, reportId: string | undefined;
     const audits: string[] = [];
+    const previousRankingFlag = config.RANKINGS_ENABLED;
     const request = async (
       path: string,
       body?: unknown,
@@ -122,6 +125,30 @@ test(
         409,
       );
       assert.equal((await request(`/api/audits/${job.id}`)).status, 200);
+      config.RANKINGS_ENABLED = "true";
+      const currentVersions = {
+        rubric: RUBRIC_VERSION,
+        prompt: PROMPT_VERSION,
+        provider: "groq",
+        model: config.GROQ_MODEL,
+      };
+      for (const [versions, expectedRank] of [
+        [currentVersions, 1],
+        [{ ...currentVersions, provider: "gemini" }, null],
+        [{ ...currentVersions, model: "other-model" }, null],
+        [{ ...currentVersions, prompt: "older-prompt" }, null],
+      ] as const) {
+        await pool.query("UPDATE audits SET assessment=$2 WHERE id=$1", [
+          job.id,
+          { rankable: true, overallScore: 50, versions },
+        ]);
+        const listing = await (
+          await request(`/api/candidates?cohortId=${cohortId}`)
+        ).json();
+        assert.equal(listing.candidates[0].rank, expectedRank);
+        assert.equal(listing.rankedCohortSize, expectedRank === 1 ? 1 : 0);
+      }
+      config.RANKINGS_ENABLED = previousRankingFlag;
       await pool.query(
         "UPDATE memberships SET role='viewer' WHERE org_id=$1 AND user_id=$2",
         [config.LOCAL_ORG_ID, config.LOCAL_USER_ID],
@@ -191,6 +218,29 @@ test(
         ).rowCount,
         2,
       );
+      await pool.query(
+        "UPDATE audits SET status='running',stage='judge' WHERE id=$1",
+        [job.id],
+      );
+      await recordJobFailure(
+        {
+          id: "synthetic-job",
+          name: "audit",
+          data: { auditId: job.id, orgId: config.LOCAL_ORG_ID },
+          attemptsMade: 1,
+          opts: { attempts: 3 },
+        },
+        new UnrecoverableError("Synthetic invalid model credential"),
+      );
+      assert.equal(
+        (await (await request(`/api/audits/${job.id}`)).json()).status,
+        "partial",
+      );
+      assert.equal(
+        (await (await request(`/api/audits/${job.id}`)).json()).stages.judge
+          .status,
+        "failed",
+      );
       await pool.query("UPDATE audits SET status='running' WHERE id=$1", [
         job.id,
       ]);
@@ -203,6 +253,7 @@ test(
         "cancelled",
       );
     } finally {
+      config.RANKINGS_ENABLED = previousRankingFlag;
       await pool.query(
         "UPDATE memberships SET role='admin' WHERE org_id=$1 AND user_id=$2",
         [config.LOCAL_ORG_ID, config.LOCAL_USER_ID],

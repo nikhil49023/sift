@@ -4,7 +4,12 @@ import helmet from "helmet";
 import { rateLimit } from "express-rate-limit";
 import { randomUUID, createHash } from "node:crypto";
 import { z } from "zod";
-import { AuditInput, Repository, RUBRIC_VERSION } from "@sift/contracts";
+import {
+  AuditInput,
+  Repository,
+  RUBRIC_VERSION,
+  PROMPT_VERSION,
+} from "@sift/contracts";
 import { pool, transaction } from "./db.ts";
 import { config, local } from "./config.ts";
 import {
@@ -402,8 +407,8 @@ app.get("/api/candidates", async (req, res) => {
     config.RANKINGS_ENABLED === "true"
       ? (
           await pool.query(
-            `SELECT c.id,a.assessment FROM candidates c JOIN LATERAL(SELECT * FROM audits WHERE candidate_id=c.id AND org_id=c.org_id ORDER BY created_at DESC LIMIT 1) a ON true WHERE c.org_id=$1 AND c.cohort_id=$2 AND a.assessment->>'rankable'='true' AND a.assessment->'versions'->>'rubric'=$3 ORDER BY (a.assessment->>'overallScore')::numeric DESC,c.id`,
-            [org, cohort, RUBRIC_VERSION],
+            `SELECT c.id,a.assessment FROM candidates c JOIN LATERAL(SELECT * FROM audits WHERE candidate_id=c.id AND org_id=c.org_id ORDER BY created_at DESC LIMIT 1) a ON true WHERE c.org_id=$1 AND c.cohort_id=$2 AND a.assessment->>'rankable'='true' AND a.assessment->'versions'->>'rubric'=$3 AND a.assessment->'versions'->>'provider'='groq' AND a.assessment->'versions'->>'model'=$4 AND a.assessment->'versions'->>'prompt'=$5 ORDER BY (a.assessment->>'overallScore')::numeric DESC,c.id`,
+            [org, cohort, RUBRIC_VERSION, config.GROQ_MODEL, PROMPT_VERSION],
           )
         ).rows
       : [];
@@ -621,15 +626,13 @@ app.use(
     _next: express.NextFunction,
   ) => {
     if (error instanceof z.ZodError)
-      return res
-        .status(400)
-        .json({
-          error: "Invalid request",
-          details: error.issues.map((i) => ({
-            path: i.path,
-            message: i.message,
-          })),
-        });
+      return res.status(400).json({
+        error: "Invalid request",
+        details: error.issues.map((i) => ({
+          path: i.path,
+          message: i.message,
+        })),
+      });
     const status =
       error instanceof HttpError
         ? error.status
@@ -646,13 +649,11 @@ app.use(
           message: error.message,
         }),
       );
-    res
-      .status(status)
-      .json({
-        error:
-          status === 500
-            ? "Request failed; try again or contact your administrator"
-            : error.message,
-      });
+    res.status(status).json({
+      error:
+        status === 500
+          ? "Request failed; try again or contact your administrator"
+          : error.message,
+    });
   },
 );

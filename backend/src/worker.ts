@@ -1,4 +1,4 @@
-import { Queue, Worker, UnrecoverableError } from "bullmq";
+import { Queue, Worker, UnrecoverableError, type Job } from "bullmq";
 import { pool, transaction } from "./db.ts";
 import { config } from "./config.ts";
 import { STAGES, type Snapshot, type Evidence } from "@sift/contracts";
@@ -301,6 +301,71 @@ export async function dispatchOutbox() {
     }
   });
 }
+export async function recordJobFailure(
+  job: Pick<Job, "id" | "name" | "data" | "opts" | "attemptsMade"> | undefined,
+  error: Error,
+) {
+  if (!job) return;
+  console.error(
+    JSON.stringify({
+      event: "job_failed",
+      jobId: job.id,
+      kind: job.name,
+      attempt: job.attemptsMade,
+      error: error.message,
+    }),
+  );
+  if (
+    !(error instanceof UnrecoverableError) &&
+    job.attemptsMade < (job.opts.attempts || 1)
+  )
+    return;
+  if (job.name === "audit") {
+    const row = (
+      await pool.query("SELECT * FROM audits WHERE id=$1 AND org_id=$2", [
+        job.data.auditId,
+        job.data.orgId,
+      ])
+    ).rows[0];
+    if (row?.stages?.forensics?.status === "completed") {
+      const evidence = (
+        await pool.query(
+          "SELECT payload FROM evidence WHERE audit_id=$1 AND org_id=$2 AND expires_at>now()",
+          [job.data.auditId, job.data.orgId],
+        )
+      ).rows.map((r) => r.payload as Evidence);
+      const snapshots: Snapshot[] = (row.snapshots || []).map((s: any) => ({
+        ...s,
+        evidence: evidence.filter((e) => e.repository === s.repository),
+      }));
+      const assessment = synthesize(
+        snapshots,
+        row.findings,
+        incompleteJudgment(
+          `Evaluation failed after bounded retries: ${error.message}`,
+        ),
+      );
+      await pool.query(
+        "UPDATE audits SET status='partial',assessment=$4,error=$3,stages=CASE WHEN stage IS NULL THEN stages ELSE jsonb_set(stages,ARRAY[stage],'{\"status\":\"failed\"}'::jsonb) END,updated_at=now() WHERE id=$1 AND org_id=$2 AND cancelled=false",
+        [job.data.auditId, job.data.orgId, error.message, assessment],
+      );
+    } else
+      await pool.query(
+        "UPDATE audits SET status='failed',error=$3,stages=CASE WHEN stage IS NULL THEN stages ELSE jsonb_set(stages,ARRAY[stage],'{\"status\":\"failed\"}'::jsonb) END,updated_at=now() WHERE id=$1 AND org_id=$2 AND cancelled=false",
+        [job.data.auditId, job.data.orgId, error.message],
+      );
+  }
+  if (job.name === "report")
+    await pool.query(
+      "UPDATE reports SET status='failed',error=$3 WHERE id=$1 AND org_id=$2",
+      [job.data.reportId, job.data.orgId, error.message],
+    );
+  if (job.name === "dataset")
+    await pool.query(
+      "UPDATE dataset_imports SET status='failed',error=$3 WHERE id=$1 AND org_id=$2",
+      [job.data.importId, job.data.orgId, error.message],
+    );
+}
 export function startWorker() {
   const worker = new Worker(
     "sift",
@@ -324,57 +389,12 @@ export function startWorker() {
       },
     },
   );
-  worker.on("failed", async (job, error) => {
-    if (!job) return;
-    console.error(
-      JSON.stringify({
-        event: "job_failed",
-        jobId: job.id,
-        kind: job.name,
-        attempt: job.attemptsMade,
-        error: error.message,
-      }),
+  worker.on("failed", (job, error) => {
+    recordJobFailure(job, error).catch(() =>
+      console.error(
+        JSON.stringify({ event: "failure_state_save_failed", jobId: job?.id }),
+      ),
     );
-    if (job.attemptsMade < (job.opts.attempts || 1)) return;
-    if (job.name === "audit") {
-      const row = (
-        await pool.query("SELECT * FROM audits WHERE id=$1 AND org_id=$2", [
-          job.data.auditId,
-          job.data.orgId,
-        ])
-      ).rows[0];
-      if (row?.stages?.forensics?.status === "completed") {
-        const snapshots: Snapshot[] = (row.snapshots || []).map((s: any) => ({
-          ...s,
-          evidence: [],
-        }));
-        const assessment = synthesize(
-          snapshots,
-          row.findings,
-          incompleteJudgment(
-            `Evaluation failed after bounded retries: ${error.message}`,
-          ),
-        );
-        await pool.query(
-          "UPDATE audits SET status='partial',assessment=$4,error=$3,updated_at=now() WHERE id=$1 AND org_id=$2 AND cancelled=false",
-          [job.data.auditId, job.data.orgId, error.message, assessment],
-        );
-      } else
-        await pool.query(
-          "UPDATE audits SET status='failed',error=$3,updated_at=now() WHERE id=$1 AND org_id=$2 AND cancelled=false",
-          [job.data.auditId, job.data.orgId, error.message],
-        );
-    }
-    if (job.name === "report")
-      await pool.query(
-        "UPDATE reports SET status='failed',error=$3 WHERE id=$1 AND org_id=$2",
-        [job.data.reportId, job.data.orgId, error.message],
-      );
-    if (job.name === "dataset")
-      await pool.query(
-        "UPDATE dataset_imports SET status='failed',error=$3 WHERE id=$1 AND org_id=$2",
-        [job.data.importId, job.data.orgId, error.message],
-      );
   });
   worker.on("error", (error) =>
     console.error(

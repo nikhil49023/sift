@@ -2,5 +2,6 @@
 /backend/ @nikhil49023
 /backend/src/jev/ @Harika-reddy2628
 /backend/test/jev.test.ts @Harika-reddy2628
+/backend/test/groq.test.ts @Harika-reddy2628
 /shared/ @nikhil49023 @Harika-reddy2628
 /frontend/ @Harika-reddy2628

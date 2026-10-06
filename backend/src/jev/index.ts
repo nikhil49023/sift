@@ -1,5 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
-import { z } from "zod";
 import {
   JudgeOutput,
   DIMENSIONS,
@@ -14,7 +12,7 @@ import {
   type AuditSubmission,
 } from "@sift/contracts";
 import { config } from "../config.ts";
-import { SYSTEM_PROMPT } from "./rubric.ts";
+import { createGroqCompletion, type JudgeCompletion } from "./groq.ts";
 
 export function validateJudgment(
   value: unknown,
@@ -116,10 +114,11 @@ export async function judge(
   snapshots: Snapshot[],
   findings: Finding[],
   input: AuditSubmission,
+  completion?: JudgeCompletion,
 ): Promise<Judgment> {
-  if (!config.GEMINI_API_KEY)
+  if (!completion && !config.GROQ_API_KEY)
     return incompleteJudgment(
-      "JEV evaluation is unavailable: GEMINI_API_KEY is not configured. Forensic observations remain available.",
+      "JEV evaluation is unavailable: GROQ_API_KEY is not configured. Forensic observations remain available.",
     );
   const all = snapshots.flatMap((s) => s.evidence);
   const priority = (e: Evidence) =>
@@ -134,20 +133,21 @@ export async function judge(
   const packet: Evidence[] = [];
   for (const e of [...all].sort((a, b) => priority(a) - priority(b))) {
     // Include whole evidence objects or skip them; excerpt validation always uses the same captured content.
-    if (e.content.length > 20000 || bytes + e.content.length > 80000) continue;
+    if (
+      e.content.length > 20000 ||
+      bytes + e.content.length > config.JEV_MAX_EVIDENCE_CHARS
+    )
+      continue;
     packet.push(e);
     bytes += e.content.length;
     if (packet.length >= 80) break;
   }
-  const client = new GoogleGenAI({
-    apiKey: config.GEMINI_API_KEY,
-    httpOptions: { timeout: 90000 },
-  });
+  const complete =
+    completion || createGroqCompletion(config.GROQ_API_KEY!, config.GROQ_MODEL);
   let correction = "";
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await client.models.generateContent({
-      model: config.GEMINI_MODEL,
-      contents: JSON.stringify({
+    const response = await complete(
+      JSON.stringify({
         evidence: packet,
         findings,
         coverage: snapshots.map((s) => ({
@@ -158,25 +158,27 @@ export async function judge(
         packetCoverage: { selected: packet.length, total: all.length },
         correction,
       }),
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        responseMimeType: "application/json",
-        responseJsonSchema: z.toJSONSchema(JudgeOutput),
-        temperature: 0,
-      },
-    });
+    );
     console.log(
       JSON.stringify({
         event: "judge_usage",
-        model: config.GEMINI_MODEL,
+        provider: "groq",
+        model: response.model,
         attempt: attempt + 1,
-        inputTokens: response.usageMetadata?.promptTokenCount,
-        outputTokens: response.usageMetadata?.candidatesTokenCount,
-        totalTokens: response.usageMetadata?.totalTokenCount,
+        inputTokens: response.inputTokens,
+        outputTokens: response.outputTokens,
+        totalTokens: response.totalTokens,
       }),
     );
     try {
-      const result = validateJudgment(JSON.parse(response.text || ""), packet);
+      const result = validateJudgment(
+        JSON.parse(response.text || "", (key, value) =>
+          (key === "startLine" || key === "endLine") && value === null
+            ? undefined
+            : value,
+        ),
+        packet,
+      );
       if (!input.jobDescription && result.roleFit)
         throw new Error("Role fit requires a job description");
       return result;
@@ -205,19 +207,21 @@ export function synthesize(
         ) * 10,
       ) / 10
     : null;
-  const riskLevel = !snapshots.length ? "INSUFFICIENT_EVIDENCE" : findings.some((f) => f.status === "FAIL")
-    ? "FLAGGED"
-    : findings.some((f) => f.status === "WARN")
-      ? "REVIEW_REQUIRED"
-      : findings.some((f) => f.status === "UNKNOWN")
-        ? "INSUFFICIENT_EVIDENCE"
-        : "NO_FLAGS_OBSERVED";
+  const riskLevel = !snapshots.length
+    ? "INSUFFICIENT_EVIDENCE"
+    : findings.some((f) => f.status === "FAIL")
+      ? "FLAGGED"
+      : findings.some((f) => f.status === "WARN")
+        ? "REVIEW_REQUIRED"
+        : findings.some((f) => f.status === "UNKNOWN")
+          ? "INSUFFICIENT_EVIDENCE"
+          : "NO_FLAGS_OBSERVED";
   const evidence = snapshots.flatMap((s) => s.evidence);
   const citationIds = new Set([
     ...DIMENSIONS.flatMap((k) =>
       judgment.dimensions[k].citations.map((c) => c.evidenceId),
     ),
-    ...(judgment.roleFit?.citations || []).map(c=>c.evidenceId),
+    ...(judgment.roleFit?.citations || []).map((c) => c.evidenceId),
   ]);
   return {
     overallScore,
@@ -261,7 +265,8 @@ export function synthesize(
       rules: RULE_VERSION,
       rubric: RUBRIC_VERSION,
       prompt: PROMPT_VERSION,
-      model: config.GEMINI_API_KEY ? config.GEMINI_MODEL : null,
+      provider: "groq",
+      model: config.GROQ_API_KEY ? config.GROQ_MODEL : null,
     },
     limitations: [
       "No submitted code was executed; CI outcomes are reported evidence.",

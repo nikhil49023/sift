@@ -1,6 +1,9 @@
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
-dotenv.config({ path: fileURLToPath(new URL("../../.env", import.meta.url)), quiet: true });
+dotenv.config({
+  path: fileURLToPath(new URL("../../.env", import.meta.url)),
+  quiet: true,
+});
 import { z } from "zod";
 const Env = z.object({
   NODE_ENV: z
@@ -15,8 +18,20 @@ const Env = z.object({
   SUPABASE_ANON_KEY: z.string().optional(),
   SUPABASE_SECRET_KEY: z.string().optional(),
   GITHUB_TOKEN: z.string().optional(),
-  GEMINI_API_KEY: z.string().optional(),
-  GEMINI_MODEL: z.string().default("gemini-2.5-flash"),
+  GROQ_API_KEY: z.string().optional(),
+  GROQ_MODEL: z.string().default("openai/gpt-oss-120b"),
+  JEV_MAX_EVIDENCE_CHARS: z.coerce
+    .number()
+    .int()
+    .min(1000)
+    .max(80000)
+    .default(16000),
+  JEV_MAX_OUTPUT_TOKENS: z.coerce
+    .number()
+    .int()
+    .min(1024)
+    .max(16384)
+    .default(4096),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   STORAGE_BUCKET: z.string().default("sift-private"),
   LOCAL_ORG_ID: z.uuid().default("00000000-0000-4000-8000-000000000001"),

@@ -33,10 +33,10 @@ In Render, create an environment group named **sift-production** before starting
 | `SUPABASE_ANON_KEY` | Supabase public browser key |
 | `SUPABASE_SECRET_KEY` | Supabase server secret/service-role key |
 | `GITHUB_TOKEN` | Token with access to public GitHub repository metadata |
-| `GEMINI_API_KEY` | Key with access and quota for the configured Gemini model |
+| `GROQ_API_KEY` | GroqCloud API key with access and quota for `openai/gpt-oss-120b` |
 | `CORS_ORIGIN` | Exact frontend origin, e.g. `https://sift-web.vercel.app` |
 
-The blueprint supplies non-secret defaults and the internal queue URL. `sync: false` secrets cannot be defined inside blueprint environment groups; existing dashboard values are preserved when omitted from YAML. [Render environment configuration](https://render.com/docs/blueprint-spec#setting-environment-variables).
+The blueprint supplies non-secret defaults, `GROQ_MODEL=openai/gpt-oss-120b`, and the internal queue URL. There is no separate JEV service or key. Strict JSON output provides structural constraints; SIFT still verifies citations and withholds unsupported scores. [Groq structured-output support](https://console.groq.com/docs/structured-outputs). `sync: false` secrets cannot be defined inside blueprint environment groups; existing dashboard values are preserved when omitted from YAML. [Render environment configuration](https://render.com/docs/blueprint-spec#setting-environment-variables).
 
 Choose **New → Blueprint**, connect `nikhil49023/sift`, select `main`, and use root `render.yaml`. Confirm the existing environment group is reused. The API pre-deploy command is `npm run migrate`; migrations are tracked and serialized. Verify the API migration completes before accepting work. If the worker starts first and reports a missing table, redeploy it after the API migration.
 
@@ -46,14 +46,14 @@ Check API `/health` returns `{"status":"ok"}` and worker logs contain `worker_st
 
 Import the same GitHub repository as `sift-web`. Choose Vite and Node.js 22, and keep **Root Directory at the repository root** (leave the field empty). The checked-in config runs `npm ci` at the workspace root, builds only the frontend workspace, and publishes `frontend/dist`. The root `package-lock.json` is the only dependency lockfile. [Vercel build settings](https://vercel.com/docs/builds/configure-a-build#root-directory).
 
-Set `VITE_API_URL` to the Render API HTTPS origin, without a trailing slash. Deploy. Update Render `CORS_ORIGIN` and Supabase auth redirect settings to the actual frontend origin, then redeploy affected services. The frontend gets only public Supabase configuration from `/api/config`; never place a database URL, GitHub token, Gemini key, or server key in Vercel's `VITE_` variables.
+Set `VITE_API_URL` to the Render API HTTPS origin, without a trailing slash. Deploy. Update Render `CORS_ORIGIN` and Supabase auth redirect settings to the actual frontend origin, then redeploy affected services. The frontend gets only public Supabase configuration from `/api/config`; never place a database URL, GitHub token, Groq key, or server key in Vercel's `VITE_` variables.
 
 For previews, use a separate staging API and Supabase project. Allow only the preview origins you intentionally use.
 
 ## 4. Staging acceptance before launch
 
 - Sign in, create a workspace and both workflow cohorts, and add another signed-in user through the membership API. Confirm viewer writes fail and cross-organization audit, evidence, decision, and report reads fail.
-- Run a real public repository audit with a Gemini key. Inspect pinned SHAs, parser exclusions, coverage limits, all cited excerpts/ranges, and whether each explanation actually supports its score. Repeat with missing history, an unsupported language, a fork, a known template, and a repository without tests.
+- Run a real public repository audit with a Groq key. Inspect pinned SHAs, parser exclusions, coverage limits, all cited excerpts/ranges, and whether each explanation actually supports its score. Repeat with missing history, an unsupported language, a fork, a known template, and a repository without tests.
 - Cancel and retry an audit. Restart the worker during collection/evaluation and confirm saved stages resume without duplicate candidate creation. Confirm provider quota/rate-limit failures leave understandable partial or failed results.
 - Record a human decision, export a PDF, and check its snapshot links, citations, decision, and manifest hash. Confirm unsigned bucket access fails and expired signed downloads fail.
 - Delete a disposable workspace, run `npm run retention -w backend` from the retention service shell, and confirm both tenant records and PDF objects disappear. Previously issued signed URLs may remain usable for their 60-second lifetime.
@@ -61,7 +61,7 @@ For previews, use a separate staging API and Supabase project. Allow only the pr
 
 ## Operations and recovery
 
-Use Render service logs for `job_failed`, `worker_error`, `dispatch_failed`, `judge_usage`, and `retention_completed`. Alert on failed jobs, sustained old queued/running audits, missed daily retention, database connection saturation, Redis memory, and provider token/quota usage. PostgreSQL `stage_attempts` records start/end times for stage duration analysis. Start with worker concurrency 2 and two active audits per organization; raise limits only after observing memory and provider quotas.
+Use Render service logs for `job_failed`, `worker_error`, `dispatch_failed`, `judge_usage`, and `retention_completed`. Alert on failed jobs, sustained old queued/running audits, missed daily retention, database connection saturation, Redis memory, and provider token/quota usage. PostgreSQL `stage_attempts` records start/end times for stage duration analysis. Evidence packets default to 16,000 source-content characters and model output to 4,096 tokens. These character limits are not exact token estimates; findings, metadata, and instructions add input tokens. Set `JEV_MAX_EVIDENCE_CHARS` and `JEV_MAX_OUTPUT_TOKENS` to match your account limits. Credential/model errors finish as a partial audit; quota and temporary service failures use bounded retries and honor `Retry-After`. Groq limits apply across your provider organization. [Groq rate limits](https://console.groq.com/docs/rate-limits). Start with worker concurrency 2 and two active audits per organization; raise limits only after observing memory and provider quotas.
 
 Daily retention runs at 02:17 UTC. Raw evidence lasts 30 days; reports/decisions and eligible audit/candidate records last one year. Workspace deletion removes database records immediately and cleans report storage on the next retention run, with repeated cleanup for seven days. Run the retention command immediately for an urgent deletion request.
 
@@ -71,6 +71,6 @@ For an application regression, redeploy the last known good API/worker commit an
 
 ## Verification performed locally
 
-Both builds and 14 tests pass, including API isolation, stage recovery, private-download behavior in local mode, cleanup, and SQL policy checks. npm reports no vulnerabilities. A real GitHub audit and a real PDF export were exercised. The Render blueprint passes Render's published JSON schema and the Docker image builds.
+Both builds and 20 tests pass, including API isolation, stage recovery, private-download behavior in local mode, cleanup, and SQL policy checks. npm reports no vulnerabilities. A real GitHub audit and a real PDF export were exercised. The Render blueprint passes Render's published JSON schema and the Docker image builds.
 
-Live Supabase login/storage/TLS, Render and Vercel provisioning, real Gemini evaluation, rubric calibration, restore drills, and production load checks remain staging work because provider projects and secrets are not supplied.
+Live Supabase login/storage/TLS, Render and Vercel provisioning, real Groq evaluation, rubric calibration, restore drills, and production load checks remain staging work because provider projects and secrets are not supplied.
