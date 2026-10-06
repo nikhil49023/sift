@@ -13,4 +13,4 @@ RUN npm run build -w backend
 ENV NODE_ENV=production
 USER node
 EXPOSE 3001
-CMD ["npm", "run", "start", "-w", "backend"]
+CMD ["sh", "backend/scripts/start.sh"]

@@ -66,7 +66,7 @@ This workspace already has its one permitted free queue. Create only the web ser
 5. Set the Docker command to:
 
 ```sh
-sh -c 'node --import tsx backend/scripts/migrate.ts && exec node --import tsx backend/src/server.ts'
+sh backend/scripts/start.sh
 ```
 
 Free services do not use a paid pre-deploy task. This command applies tracked, serialized migrations before accepting requests. Migrations create the application tables, RLS read policies, and private `sift-private` storage bucket in Supabase. The process then starts the API, worker, recovery loop, and cleanup.

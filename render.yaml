@@ -6,7 +6,7 @@ services:
     region: singapore
     dockerfilePath: backend/Dockerfile
     dockerContext: .
-    dockerCommand: sh -c 'node --import tsx backend/scripts/migrate.ts && exec node --import tsx backend/src/server.ts'
+    dockerCommand: sh backend/scripts/start.sh
     healthCheckPath: /health
     autoDeployTrigger: checksPass
     envVars:
