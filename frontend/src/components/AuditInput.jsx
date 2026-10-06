@@ -1,130 +1,16 @@
-import React from 'react';
-import { Search, Cpu, Database, Sparkles, CheckCircle2 } from 'lucide-react';
-
-export default function AuditInput({
-  inputUrl,
-  setInputUrl,
-  handleAudit,
-  isAuditing,
-  auditStep,
-  steps
-}) {
-  return (
-    <section className="bg-gradient-to-b from-[#121824] to-[#0E1420] border border-slate-800 rounded-2xl p-6 shadow-xl">
-      <div className="max-w-3xl mx-auto flex flex-col gap-3 text-center mb-6">
-        <div className="inline-flex items-center justify-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold w-fit mx-auto">
-          <Database className="w-3.5 h-3.5" />
-          Powered by Open-Source Redrob Challenge & Live GitHub API
-        </div>
-        <h1 className="text-2xl md:text-3xl font-extrabold text-white">
-          Screen Real Code. <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">Catch Honeypots & Fakes.</span>
-        </h1>
-        <p className="text-xs md:text-sm text-slate-400 leading-relaxed">
-          Audit candidates from the <strong>Redrob AI Challenge</strong> or enter any live GitHub repo (e.g. <code className="text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded">pallets/flask</code> or <code className="text-cyan-300 bg-slate-900/80 px-1.5 py-0.5 rounded">expressjs/express</code>) for instant 5-pillar Anti-Cheat forensics.
-        </p>
-      </div>
-
-      <form onSubmit={handleAudit} className="max-w-2xl mx-auto flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="w-5 h-5 text-slate-500 absolute left-3 top-3.5" />
-          <input 
-            type="text"
-            placeholder="Enter GitHub Repo (e.g. pallets/flask) or Redrob ID (e.g. CAND_0039754)..."
-            value={inputUrl}
-            onChange={(e) => setInputUrl(e.target.value)}
-            disabled={isAuditing}
-            className="w-full bg-[#090D14] border border-slate-700 rounded-xl pl-10 pr-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition font-mono"
-          />
-        </div>
-        <button 
-          type="submit"
-          disabled={isAuditing || !inputUrl}
-          className="bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold px-6 py-3 rounded-xl text-sm flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/20 disabled:opacity-50 transition shrink-0 cursor-pointer"
-        >
-          <Cpu className="w-4 h-4" />
-          {isAuditing ? "Auditing Ground Truth..." : "SIFT Candidate"}
-        </button>
-      </form>
-
-      {/* Quick Example Chips */}
-      <div className="max-w-2xl mx-auto mt-3 flex flex-wrap items-center justify-center gap-2 text-[11px] text-slate-400">
-        <span className="text-slate-500">Quick Try:</span>
-        <button
-          type="button"
-          onClick={() => setInputUrl('pallets/flask')}
-          className="hover:text-cyan-300 hover:border-cyan-500/40 border border-slate-800 bg-[#0A0E17] px-2 py-0.5 rounded text-slate-400 transition font-mono"
-        >
-          pallets/flask
-        </button>
-        <button
-          type="button"
-          onClick={() => setInputUrl('expressjs/express')}
-          className="hover:text-cyan-300 hover:border-cyan-500/40 border border-slate-800 bg-[#0A0E17] px-2 py-0.5 rounded text-slate-400 transition font-mono"
-        >
-          expressjs/express
-        </button>
-        <button
-          type="button"
-          onClick={() => setInputUrl('CAND_0039754')}
-          className="hover:text-cyan-300 hover:border-cyan-500/40 border border-slate-800 bg-[#0A0E17] px-2 py-0.5 rounded text-slate-400 transition font-mono"
-        >
-          CAND_0039754 (Clean)
-        </button>
-        <button
-          type="button"
-          onClick={() => setInputUrl('CAND_0010943')}
-          className="hover:text-rose-300 hover:border-rose-500/40 border border-slate-800 bg-[#0A0E17] px-2 py-0.5 rounded text-slate-400 transition font-mono"
-        >
-          CAND_0010943 (Decoy)
-        </button>
-      </div>
-
-      {/* Animated 4-Agent Stepper when running */}
-      {isAuditing && steps && (
-        <div className="max-w-2xl mx-auto mt-6 bg-[#090D14] border border-cyan-500/30 rounded-xl p-4">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="font-semibold text-cyan-400 flex items-center gap-2">
-              <Sparkles className="w-3.5 h-3.5 animate-spin" />
-              {steps[auditStep]?.title || 'Auditing...'}
-            </span>
-            <span className="text-slate-500">Step {auditStep + 1} of {steps.length}</span>
-          </div>
-          <p className="text-xs text-slate-300">{steps[auditStep]?.desc}</p>
-          
-          {/* Progress bar */}
-          <div className="w-full bg-slate-800 h-2 rounded-full mt-3 overflow-hidden">
-            <div 
-              className="bg-gradient-to-r from-cyan-500 to-blue-500 h-full transition-all duration-500 rounded-full" 
-              style={{ width: `${((auditStep + 1) / steps.length) * 100}%` }}
-            />
-          </div>
-
-          {/* Stepper pills */}
-          <div className="grid grid-cols-4 gap-2 mt-4">
-            {steps.map((st, idx) => (
-              <div 
-                key={idx}
-                className={`p-2 rounded-lg text-[10px] border transition ${
-                  idx === auditStep 
-                    ? 'border-cyan-500/50 bg-cyan-950/30 text-cyan-200' 
-                    : idx < auditStep 
-                    ? 'border-emerald-500/30 bg-emerald-950/20 text-emerald-400' 
-                    : 'border-slate-800/80 bg-slate-900/40 text-slate-600'
-                }`}
-              >
-                <div className="font-bold flex items-center gap-1">
-                  {idx < auditStep ? (
-                    <CheckCircle2 className="w-3 h-3 text-emerald-400" />
-                  ) : (
-                    <span>#{idx + 1}</span>
-                  )}
-                  <span className="truncate">{st.title.split(':')[0]}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </section>
-  );
+import React, { useState } from 'react';
+import { Search, GitBranch, LoaderCircle } from 'lucide-react';
+const stages = ['scout', 'forensics', 'judge', 'synthesizer'];
+const labels = ['Collect evidence', 'Inspect code & history', 'Evaluate JEV rubric', 'Assemble assessment'];
+export default function AuditInput({ workflow, onSubmit, disabled, audit, onCancel, discoverProfile }) {
+  const [name, setName] = useState(''), [repositories, setRepositories] = useState(''), [team, setTeam] = useState(''), [start, setStart] = useState(''), [end, setEnd] = useState(''), [jobDescription, setJobDescription] = useState(''), [profile, setProfile] = useState(''), [discovered, setDiscovered] = useState([]), [chosen, setChosen] = useState([]), [message, setMessage] = useState(''), [discovering, setDiscovering] = useState(false);
+  const active = audit && ['queued', 'running'].includes(audit.status);
+  return <section className="panel"><div className="flex items-center gap-3 mb-4"><GitBranch className="text-cyan-400" /><div><h1 className="text-xl font-bold">{workflow === 'hackathon' ? 'Audit a hackathon submission' : 'Review a candidate’s engineering evidence'}</h1><p className="text-sm text-slate-400 mt-1">Public GitHub snapshots, scoped forensic observations, and cited evaluations.</p></div></div>
+    {workflow === 'recruiting' && <div className="mb-4 p-3 border border-slate-800 rounded-xl"><div className="flex flex-wrap items-end gap-2"><label className="field flex-1">Discover a GitHub profile<input value={profile} onChange={e => setProfile(e.target.value)} placeholder="GitHub username" /></label><button className="button secondary" disabled={!profile || discovering || disabled} onClick={async () => { setDiscovering(true); setMessage(''); try { const result = await discoverProfile(profile.replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '')); setDiscovered(result.repositories); setChosen([]); if (!result.complete) setMessage('Showing the first 200 repositories; you can enter a repository directly.'); } catch (e) { setMessage(e.message); } finally { setDiscovering(false); } }}><Search size={15} />Find repositories</button></div><div className="max-h-48 overflow-auto mt-2">{discovered.map(repo => <label key={repo.name} className="flex items-start gap-2 text-sm py-2"><input type="checkbox" checked={chosen.includes(repo.name)} disabled={disabled || !chosen.includes(repo.name) && chosen.length >= 5} onChange={e => setChosen(current => e.target.checked ? [...current, repo.name] : current.filter(r => r !== repo.name))} /><span>{repo.name}{repo.fork && <span className="text-slate-500 ml-2">fork</span>}</span></label>)}</div></div>}
+    <form onSubmit={e => { e.preventDefault(); setMessage(''); try { if (!!start !== !!end) throw new Error('Supply both sprint boundaries or leave both empty.'); const repos = chosen.length ? chosen : repositories.split(/[\n,]+/).map(r => r.trim()).filter(Boolean); if (!repos.length || repos.length > (workflow === 'hackathon' ? 1 : 5)) throw new Error('Choose one repository for a hackathon, or up to five for recruiting.'); onSubmit({ candidateName: name, repositories: repos, team: workflow === 'hackathon' ? team.split(',').map(t => t.trim()).filter(Boolean) : [], ...(start && end ? { sprint: { start: new Date(start).toISOString(), end: new Date(end).toISOString() } } : {}), ...(workflow === 'recruiting' && jobDescription ? { jobDescription } : {}) }); } catch (e) { setMessage(e.message); } }}>
+      <div className="grid md:grid-cols-2 gap-4"><label className="field">{workflow === 'hackathon' ? 'Team / submission name' : 'Candidate name'}<input required maxLength={200} value={name} onChange={e => setName(e.target.value)} disabled={disabled || active} /></label><label className="field">{chosen.length ? `${chosen.length} repositories selected above` : 'Repository URL or owner/repository'}<input required={!chosen.length} value={repositories} onChange={e => setRepositories(e.target.value)} placeholder={workflow === 'hackathon' ? 'https://github.com/owner/project' : 'owner/project, owner/another-project'} disabled={disabled || active || chosen.length > 0} /></label>
+        {workflow === 'hackathon' ? <><label className="field">Sprint start (optional, your local time)<input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} disabled={disabled || active} /></label><label className="field">Sprint end (optional, your local time)<input type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} disabled={disabled || active} /></label><label className="field md:col-span-2">Declared team (comma-separated)<input value={team} onChange={e => setTeam(e.target.value)} disabled={disabled || active} placeholder="Names or GitHub handles; identities are reviewed explicitly" /></label></> : <label className="field md:col-span-2">Job description (optional)<textarea rows={3} maxLength={12000} value={jobDescription} onChange={e => setJobDescription(e.target.value)} disabled={disabled || active} placeholder="Role fit is assessed separately from engineering quality." /></label>}
+      </div><p role="status" className="text-amber-300 text-sm mt-3">{message}</p><button className="button mt-3" disabled={disabled || active}>{active ? <LoaderCircle className="animate-spin" size={16} /> : <Search size={16} />}Collect & evaluate evidence</button>
+    </form>{audit && <div className="mt-5 border-t border-slate-800 pt-4" role="status" aria-live="polite"><div className="flex justify-between items-center gap-3"><span className="text-xs text-slate-400">Audit {audit.id.slice(0, 8)} · {audit.status}</span>{active && <button className="text-sm text-amber-300" disabled={disabled} onClick={onCancel}>Cancel audit</button>}</div><ol className="grid sm:grid-cols-4 gap-3 mt-3">{stages.map((stage, i) => <li key={stage} className={`rounded-xl p-3 border text-xs ${audit.stages?.[stage]?.status === 'completed' ? 'border-emerald-800 text-emerald-300' : audit.stage === stage ? 'border-cyan-700 text-cyan-300' : 'border-slate-800 text-slate-500'}`}><span className="block font-semibold">{i + 1}. {labels[i]}</span><span>{audit.stages?.[stage]?.status || 'waiting'}</span></li>)}</ol>{audit.error && <p className="text-amber-300 text-sm mt-3">{audit.error}</p>}</div>}
+  </section>;
 }

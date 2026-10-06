@@ -1,303 +1,77 @@
-import React, { useState } from 'react';
-import { realCandidates } from './data/realCandidates';
+import React, { useCallback, useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { request, downloadReport } from './api';
 import Navbar from './components/Navbar';
 import AuditInput from './components/AuditInput';
-import CandidateProfileCard from './components/CandidateProfileCard';
 import AntiCheatGrid from './components/AntiCheatGrid';
+import RadarScorecard from './components/RadarScorecard';
 import CodeCitations from './components/CodeCitations';
+import Leaderboard from './components/Leaderboard';
+import CandidateProfileCard from './components/CandidateProfileCard';
 import CommitVelocityChart from './components/CommitVelocityChart';
 import RubricMatrix from './components/RubricMatrix';
-import RadarScorecard from './components/RadarScorecard';
-import Leaderboard from './components/Leaderboard';
-import AuditDossierModal from './components/AuditDossierModal';
 import JuryDefenseModal from './components/JuryDefenseModal';
-import { Scale, Terminal, Activity, Award } from 'lucide-react';
 
 export default function App() {
-  const [candidates, setCandidates] = useState(realCandidates);
-  const [selectedCandidate, setSelectedCandidate] = useState(realCandidates[0]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('ALL');
-  const [isAuditing, setIsAuditing] = useState(false);
-  const [inputUrl, setInputUrl] = useState('');
-  const [auditStep, setAuditStep] = useState(0);
-  const [isDossierOpen, setIsDossierOpen] = useState(false);
-  const [isJuryPlaybookOpen, setIsJuryPlaybookOpen] = useState(false);
-  const [activeDossierTab, setActiveDossierTab] = useState('forensics'); // 'forensics' | 'citations' | 'velocity' | 'rubric'
-
-  const steps = [
-    { title: "Agent 1: Ingestion Scout", desc: "Fetching real GitHub/Redrob telemetry & commit graphs..." },
-    { title: "Agent 2: Anti-Cheat Forensics", desc: "Running 5-pillar fraud, template & honeypot decoy detection..." },
-    { title: "Agent 3: JEV Verification Judge", desc: "Evaluating evidence against 4-pillar rubric with citations..." },
-    { title: "Agent 4: Decision Synthesizer", desc: "Normalizing scores & building unforgeable audit dossier..." }
-  ];
-
-  const handleAudit = async (e) => {
-    e.preventDefault();
-    if (!inputUrl) return;
-
-    setIsAuditing(true);
-    setAuditStep(0);
-
-    // Check if input matches an existing Redrob candidate ID
-    const foundRedrob = candidates.find(c => c.id.toLowerCase() === inputUrl.trim().toLowerCase());
-    if (foundRedrob) {
-      setSelectedCandidate(foundRedrob);
-      setIsAuditing(false);
-      setInputUrl('');
-      return;
-    }
-
-    // Step animation
-    const interval = setInterval(() => {
-      setAuditStep((prev) => (prev < 3 ? prev + 1 : prev));
-    }, 800);
-
-    try {
-      // Clean input to detect repo or user
-      let cleanInput = inputUrl.trim().replace('https://github.com/', '').replace(/\/$/, '');
-      const parts = cleanInput.split('/');
-
-      let repoData = null;
-      let commitsData = [];
-      let langsData = {};
-
-      if (parts.length >= 2) {
-        // Fetch Real Live GitHub Repo
-        const [owner, repo] = parts;
-        const res = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
-        if (res.ok) {
-          repoData = await res.json();
-          const commitsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits?per_page=30`);
-          if (commitsRes.ok) commitsData = await commitsRes.json();
-          const langsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/languages`);
-          if (langsRes.ok) langsData = await langsRes.json();
-        }
-      }
-
-      clearInterval(interval);
-      setIsAuditing(false);
-
-      if (repoData) {
-        // Calculate real metrics from GitHub data
-        const isFork = repoData.fork;
-        const commitCount = commitsData.length;
-        const langs = Object.keys(langsData);
-        const hasTests = langs.includes('Python') || langs.includes('TypeScript') || langs.includes('Rust');
-        
-        const riskLevel = isFork ? 'SUSPICIOUS' : (commitCount < 5 ? 'RED FLAG' : 'CLEAN');
-        const overallScore = isFork ? 42 : (commitCount < 5 ? 28 : Math.min(95, 70 + Math.min(25, commitCount)));
-
-        const realCand = {
-          id: `GH_${repoData.id}`,
-          username: repoData.owner.login,
-          name: repoData.owner.login,
-          avatar: repoData.owner.avatar_url,
-          source: "Live GitHub API (Ground Truth)",
-          repoName: repoData.name,
-          repoUrl: repoData.html_url,
-          overallScore: overallScore,
-          percentile: overallScore > 85 ? "Top 5%" : (overallScore > 60 ? "Top 35%" : "Bottom 20%"),
-          verdict: overallScore > 80 ? "STRONG ADVANCE" : (overallScore > 50 ? "REVIEW" : "REJECT / HOLLOW"),
-          riskLevel: riskLevel,
-          summary: repoData.description || "Real open-source repository audited via live GitHub API.",
-          metrics: {
-            systemsRigor: isFork ? 40 : Math.min(96, overallScore + 3),
-            algorithmicDepth: Math.min(94, overallScore),
-            testingVerification: hasTests ? 88 : 35,
-            collaborationHygiene: Math.min(92, commitCount * 3 + 40)
-          },
-          antiCheat: {
-            timelineStatus: commitCount > 5 ? "PASS" : "WARN",
-            timelineDetail: `Created at ${new Date(repoData.created_at).toLocaleDateString()}. ${commitCount} recent commits audited.`,
-            diffVelocityStatus: isFork ? "FAIL" : "PASS",
-            diffVelocityDetail: isFork ? "Fork repository detected. Downstream changes require isolation from upstream." : "Original repository root.",
-            contributorStatus: "PASS",
-            contributorDetail: `Default branch: ${repoData.default_branch}. Open issues: ${repoData.open_issues_count}.`,
-            codeAuthenticityStatus: isFork ? "WARN" : "PASS",
-            codeAuthenticityDetail: `Languages: ${langs.slice(0, 4).join(', ') || 'Code'}. Watchers: ${repoData.watchers_count}.`,
-            plagiarismStatus: isFork ? "WARN" : "PASS",
-            plagiarismDetail: repoData.license ? `Licensed under ${repoData.license.name}` : "No license declared."
-          },
-          citations: [
-            { file: `${repoData.name}/commits#recent`, desc: `Audited ${commitsData.length} live commits via GitHub API.` },
-            { file: `${repoData.name}/languages`, desc: `Primary stack: ${langs.slice(0, 3).join(', ') || 'N/A'}` }
-          ],
-          primaryLanguages: langs.slice(0, 3).length > 0 ? langs.slice(0, 3) : ["Code"],
-          totalCommits: commitCount,
-          codeVolume: `${repoData.size} KB`
-        };
-
-        setCandidates([realCand, ...candidates]);
-        setSelectedCandidate(realCand);
-        setInputUrl('');
-      } else {
-        alert("Repository not found or rate limited. Please try a public repository like 'facebook/react' or 'expressjs/express'.");
-      }
-    } catch (err) {
-      clearInterval(interval);
-      setIsAuditing(false);
-      alert("Error querying GitHub API. Checking local Redrob candidates.");
-    }
-  };
-
-  const filteredCandidates = candidates.filter(cand => {
-    const matchesSearch = cand.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          cand.username.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          cand.repoName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          cand.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (cand.primaryLanguages && cand.primaryLanguages.some(l => l.toLowerCase().includes(searchQuery.toLowerCase())));
-    if (activeFilter === 'CLEAN') return matchesSearch && cand.riskLevel === 'CLEAN';
-    if (activeFilter === 'SUSPICIOUS') return matchesSearch && cand.riskLevel === 'SUSPICIOUS';
-    if (activeFilter === 'RED FLAG') return matchesSearch && cand.riskLevel === 'RED FLAG';
-    return matchesSearch;
-  });
-
-  const flaggedCount = candidates.filter(c => c.riskLevel !== 'CLEAN').length;
-
-  return (
-    <div className="min-h-screen bg-[#0B0F17] text-slate-100 flex flex-col font-sans">
-      {/* Top Navbar */}
-      <Navbar 
-        candidateCount={candidates.length} 
-        flaggedCount={flaggedCount} 
-        onOpenJuryPlaybook={() => setIsJuryPlaybookOpen(true)}
-      />
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-8">
-        
-        {/* Ingestion & Audit Form */}
-        <AuditInput 
-          inputUrl={inputUrl}
-          setInputUrl={setInputUrl}
-          handleAudit={handleAudit}
-          isAuditing={isAuditing}
-          auditStep={auditStep}
-          steps={steps}
-        />
-
-        {/* Selected Candidate Detailed Dossier */}
-        {selectedCandidate && (
-          <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Left Column: Candidate Summary & Tabbed Forensic Views */}
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              <CandidateProfileCard candidate={selectedCandidate} />
-
-              {/* Dossier Tabs Navigation */}
-              <div className="flex items-center gap-2 bg-[#0E1422] p-1.5 rounded-xl border border-slate-800 text-xs overflow-x-auto">
-                <button
-                  onClick={() => setActiveDossierTab('forensics')}
-                  className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
-                    activeDossierTab === 'forensics'
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Scale className="w-3.5 h-3.5 text-cyan-400" />
-                  5-Pillar Anti-Cheat Forensics
-                </button>
-
-                <button
-                  onClick={() => setActiveDossierTab('citations')}
-                  className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
-                    activeDossierTab === 'citations'
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                  Evidence Citations ({selectedCandidate.citations?.length || 0})
-                </button>
-
-                <button
-                  onClick={() => setActiveDossierTab('velocity')}
-                  className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
-                    activeDossierTab === 'velocity'
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                  Commit Cadence
-                </button>
-
-                <button
-                  onClick={() => setActiveDossierTab('rubric')}
-                  className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
-                    activeDossierTab === 'rubric'
-                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Award className="w-3.5 h-3.5 text-cyan-400" />
-                  JEV-4 Criteria
-                </button>
-              </div>
-
-              {/* Tab Contents */}
-              {activeDossierTab === 'forensics' && (
-                <AntiCheatGrid antiCheat={selectedCandidate.antiCheat} />
-              )}
-
-              {activeDossierTab === 'citations' && (
-                <CodeCitations 
-                  citations={selectedCandidate.citations} 
-                  repoUrl={selectedCandidate.repoUrl} 
-                />
-              )}
-
-              {activeDossierTab === 'velocity' && (
-                <CommitVelocityChart candidate={selectedCandidate} />
-              )}
-
-              {activeDossierTab === 'rubric' && (
-                <RubricMatrix metrics={selectedCandidate.metrics} />
-              )}
-            </div>
-
-            {/* Right Column: JEV Radar Chart & Decision Verdict */}
-            <div className="flex flex-col gap-6">
-              <RadarScorecard 
-                candidate={selectedCandidate} 
-                onExportDossier={() => setIsDossierOpen(true)}
-              />
-            </div>
-          </section>
-        )}
-
-        {/* Candidate Leaderboard Table */}
-        <Leaderboard 
-          candidates={candidates}
-          filteredCandidates={filteredCandidates}
-          selectedCandidate={selectedCandidate}
-          setSelectedCandidate={setSelectedCandidate}
-          activeFilter={activeFilter}
-          setActiveFilter={setActiveFilter}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-        />
-
-      </main>
-
-      {/* Verified Dossier Modal / PDF Export */}
-      <AuditDossierModal 
-        candidate={selectedCandidate}
-        isOpen={isDossierOpen}
-        onClose={() => setIsDossierOpen(false)}
-      />
-
-      {/* Jury Defense Playbook Modal */}
-      <JuryDefenseModal 
-        isOpen={isJuryPlaybookOpen}
-        onClose={() => setIsJuryPlaybookOpen(false)}
-      />
-
-      {/* Footer */}
-      <footer className="border-t border-slate-800/80 py-4 px-6 text-center text-xs text-slate-500 bg-[#090D14]">
-        SIFT Decision Intelligence Engine • Powered by Redrob AI Open Benchmark & Live GitHub API • Engineered by The SIFT Core Team
-      </footer>
-    </div>
-  );
+  const [settings, setSettings] = useState(null), [auth, setAuth] = useState(null), [session, setSession] = useState(null);
+  const [organizations, setOrganizations] = useState([]), [orgId, setOrgId] = useState(''), [cohorts, setCohorts] = useState([]), [cohortId, setCohortId] = useState('');
+  const [workflow, setWorkflow] = useState('hackathon'), [cohortName, setCohortName] = useState(''), [orgName, setOrgName] = useState('');
+  const [candidates, setCandidates] = useState([]), [total, setTotal] = useState(0), [page, setPage] = useState(1), [rankedSize, setRankedSize] = useState(0), [selected, setSelected] = useState(null);
+  const [audit, setAudit] = useState(null), [evidence, setEvidence] = useState([]), [search, setSearch] = useState(''), [filter, setFilter] = useState('ALL');
+  const [error, setError] = useState(''), [busy, setBusy] = useState(false), [exporting, setExporting] = useState(false), [playbook, setPlaybook] = useState(false), [email, setEmail] = useState(''), [authMessage, setAuthMessage] = useState('');
+  const activeOrg = organizations.find(o => o.id === orgId); const canWrite = activeOrg && activeOrg.role !== 'viewer';
+  const api = useCallback((path, options = {}) => request(path, { token: session?.access_token, orgId, ...options }), [session?.access_token, orgId]);
+  const boot = useCallback(async () => {
+    try { const configuration = await request('/api/config'); setSettings(configuration); setError('');
+      if (configuration.authMode === 'supabase') { const client = createClient(configuration.supabaseUrl, configuration.supabaseAnonKey); setAuth(client); const { data } = await client.auth.getSession(); setSession(data.session); }
+    } catch (e) { setError(`Unable to reach SIFT: ${e.message}`); }
+  }, []);
+  useEffect(() => { boot(); }, [boot]);
+  useEffect(() => { if (!auth) return; const { data } = auth.auth.onAuthStateChange((_event, next) => setSession(next)); return () => data.subscription.unsubscribe(); }, [auth]);
+  const ready = settings && (settings.authMode === 'local' || session);
+  useEffect(() => { if (!ready) { setOrgId(''); setOrganizations([]); return; } let alive = true;
+    request('/api/organizations', { token: session?.access_token }).then(rows => { if (!alive) return; setOrganizations(rows); setOrgId(current => rows.some(o => o.id === current) ? current : rows[0]?.id || ''); }).catch(e => alive && setError(e.message)); return () => { alive = false; };
+  }, [!!ready, session?.access_token]);
+  useEffect(() => { setCandidates([]); setSelected(null); setEvidence([]); setAudit(null); setCohortId(''); setPage(1); if (!orgId) return; let alive = true;
+    api('/api/cohorts').then(rows => { if (!alive) return; setCohorts(rows); setCohortId(rows.find(c => c.workflow === workflow)?.id || ''); }).catch(e => alive && setError(e.message));
+    const saved = sessionStorage.getItem(`sift.audit:${orgId}`); if (saved) api(`/api/audits/${saved}`).then(row => alive && setAudit(row)).catch(() => sessionStorage.removeItem(`sift.audit:${orgId}`));
+    return () => { alive = false; };
+  }, [orgId]);
+  const refreshCandidates = useCallback(async () => { if (!orgId || !cohortId) return; const result = await api(`/api/candidates?cohortId=${cohortId}&page=${page}&search=${encodeURIComponent(search)}`); setCandidates(result.candidates); setTotal(result.total); setRankedSize(result.rankedCohortSize); }, [api, orgId, cohortId, page, search]);
+  useEffect(() => { let alive = true; const controller = new AbortController(); if (!cohortId || !orgId) { setCandidates([]); setTotal(0); return; }
+    api(`/api/candidates?cohortId=${cohortId}&page=${page}&search=${encodeURIComponent(search)}`, { signal: controller.signal }).then(result => { if (!alive) return; setCandidates(result.candidates); setTotal(result.total); setRankedSize(result.rankedCohortSize); }).catch(e => alive && e.name !== 'AbortError' && setError(e.message)); return () => { alive = false; controller.abort(); };
+  }, [api, cohortId, page, search, orgId]);
+  const loadCandidate = useCallback(async id => { const row = await api(`/api/candidates/${id}`); setSelected(row); const current = row.audits?.[0]; setAudit(current || null); setEvidence(current ? await api(`/api/audits/${current.id}/evidence`) : []); }, [api]);
+  useEffect(() => { if (!audit?.id || !['queued', 'running'].includes(audit.status)) return; let alive = true, timer;
+    const poll = async () => { try { const next = await api(`/api/audits/${audit.id}`); if (!alive) return; setAudit(next); if (['queued', 'running'].includes(next.status)) timer = setTimeout(poll, 2000); else { await refreshCandidates(); await loadCandidate(next.candidate_id); } } catch (e) { if (alive) { setError(e.message); timer = setTimeout(poll, 5000); } } }; timer = setTimeout(poll, 1000); return () => { alive = false; clearTimeout(timer); };
+  }, [audit?.id, audit?.status, api, refreshCandidates, loadCandidate]);
+  const perform = async action => { setBusy(true); setError(''); try { await action(); } catch (e) { setError(e.message); } finally { setBusy(false); } };
+  const createCohort = () => perform(async () => { const cohort = await api('/api/cohorts', { body: { name: cohortName, workflow } }); setCohorts(current => [cohort, ...current]); setCohortId(cohort.id); setCohortName(''); setPage(1); });
+  const submitAudit = input => perform(async () => { const result = await api('/api/audits', { body: { ...input, workflow, cohortId }, idempotencyKey: crypto.randomUUID() }); sessionStorage.setItem(`sift.audit:${orgId}`, result.id); setAudit(await api(`/api/audits/${result.id}`)); setSelected(null); setEvidence([]); await refreshCandidates(); });
+  const exportPdf = async () => { setExporting(true); setError(''); try { const report = await api(`/api/audits/${audit.id}/reports`, { body: {} }); for (let i = 0; i < 60; i++) { await new Promise(resolve => setTimeout(resolve, 1000)); const result = await api(`/api/reports/${report.id}`); if (result.status === 'completed') { await downloadReport(result.downloadUrl, session?.access_token, orgId); return; } if (result.status === 'failed') throw new Error(result.error || 'Report generation failed'); } throw new Error(`Report is still processing. Report ID: ${report.id}`); } catch (e) { setError(e.message); } finally { setExporting(false); } };
+  const saveDecision = (decision, rationale) => perform(async () => { await api(`/api/candidates/${selected.id}/decisions`, { body: { auditId: audit.id, decision, rationale } }); await loadCandidate(selected.id); });
+  const changeWorkflow = next => { setWorkflow(next); setCohortId(cohorts.find(c => c.workflow === next)?.id || ''); setSelected(null); setAudit(null); setEvidence([]); setPage(1); };
+  return <div className="min-h-screen flex flex-col">
+    <Navbar candidateCount={total} flaggedCount={candidates.filter(c => c.assessment?.riskLevel === 'REVIEW_REQUIRED').length} onOpenJuryPlaybook={() => setPlaybook(true)} />
+    <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col gap-6">
+      {error && <div role="alert" className="panel border-rose-500/40 text-rose-200 flex justify-between gap-3"><span>{error}</span><button onClick={() => setError('')} aria-label="Dismiss error">×</button></div>}
+      {!settings && <div className="panel"><p>Connecting to SIFT…</p><button className="button mt-3" onClick={boot}>Retry connection</button></div>}
+      {settings?.authMode === 'supabase' && !session && <form className="panel max-w-lg" onSubmit={e => { e.preventDefault(); perform(async () => { const { error } = await auth.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } }); if (error) throw error; setAuthMessage('Check your email for the sign-in link.'); }); }}><h1 className="text-xl font-bold">Sign in to your SIFT workspace</h1><label className="field mt-4">Email<input required type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" /></label><button className="button mt-3" disabled={busy || !auth}>Send sign-in link</button><p role="status" className="mt-3 text-sm text-cyan-300">{authMessage}</p></form>}
+      {ready && <>
+        {settings.authMode === 'local' && <p className="text-xs text-amber-300">Local development workspace · production requires sign-in</p>}
+        <section className="panel flex flex-wrap items-end gap-4" aria-label="Workspace controls">
+          <label className="field">Organization<select value={orgId} onChange={e => setOrgId(e.target.value)}>{organizations.map(o => <option value={o.id} key={o.id}>{o.name} ({o.role})</option>)}</select></label>
+          <div className="flex gap-2" role="group" aria-label="Evaluation workflow">{['hackathon', 'recruiting'].map(w => <button key={w} className={`button ${workflow === w ? '' : 'secondary'}`} aria-pressed={workflow === w} onClick={() => changeWorkflow(w)}>{w === 'hackathon' ? 'Hackathon jury' : 'Recruiting'}</button>)}</div>
+          <label className="field">Evaluation cohort<select value={cohortId} onChange={e => { setCohortId(e.target.value); setPage(1); setSelected(null); setAudit(null); }}><option value="">Choose a cohort</option>{cohorts.filter(c => c.workflow === workflow).map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label>
+          {session && <button className="button secondary" onClick={() => auth.auth.signOut()}>Sign out</button>}
+          {canWrite && <form className="flex items-end gap-2" onSubmit={e => { e.preventDefault(); createCohort(); }}><label className="field">New cohort<input required maxLength={120} value={cohortName} onChange={e => setCohortName(e.target.value)} placeholder="October submissions" /></label><button className="button secondary" disabled={busy}>Create</button></form>}
+          {!orgId && <form className="flex gap-2" onSubmit={e => { e.preventDefault(); perform(async () => { const org = await request('/api/organizations', { token: session?.access_token, body: { name: orgName } }); setOrganizations(current => [...current, org]); setOrgId(org.id); }); }}><label className="field">Organization name<input required value={orgName} onChange={e => setOrgName(e.target.value)} /></label><button className="button" disabled={busy}>Create workspace</button></form>}
+        </section>
+        {cohortId && <AuditInput workflow={workflow} onSubmit={submitAudit} disabled={!canWrite || busy} audit={audit} onCancel={() => perform(async () => { await api(`/api/audits/${audit.id}/cancel`, { body: {} }); setAudit(await api(`/api/audits/${audit.id}`)); await refreshCandidates(); })} discoverProfile={username => api(`/api/github/profiles/${encodeURIComponent(username)}/repositories`)} />}
+        {!cohortId && <div className="panel text-slate-400">Create or choose a cohort to start collecting evidence. Cohorts keep unrelated submissions out of the same ranking.</div>}
+        {selected && <section className="grid grid-cols-1 lg:grid-cols-3 gap-6" aria-label="Candidate dossier"><div className="lg:col-span-2 flex flex-col gap-6"><CandidateProfileCard candidate={selected} audit={audit} /><AntiCheatGrid findings={audit?.findings || []} /><CommitVelocityChart evidence={evidence} loadEvidence={id => api(`/api/audits/${audit.id}/evidence/${id}`)} /><CodeCitations evidence={evidence} dimensions={audit?.assessment?.dimensions} loadEvidence={id => api(`/api/audits/${audit.id}/evidence/${id}`)} /><RubricMatrix dimensions={audit?.assessment?.dimensions} /></div><RadarScorecard assessment={audit?.assessment} audit={audit} decisions={selected.decisions} workflow={workflow} onDecision={saveDecision} canWrite={canWrite} onExportDossier={exportPdf} exporting={exporting} busy={busy} /></section>}
+        {cohortId && <Leaderboard candidates={candidates} total={total} page={page} setPage={setPage} selectedId={selected?.id} onSelect={id => perform(() => loadCandidate(id))} search={search} setSearch={value => { setSearch(value); setPage(1); }} filter={filter} setFilter={setFilter} rankedSize={rankedSize} rankingsEnabled={settings.rankingsEnabled} />}
+      </>}
+    </main><JuryDefenseModal isOpen={playbook} onClose={() => setPlaybook(false)} /><footer className="border-t border-slate-800 p-5 text-center text-xs text-slate-500">SIFT · Evidence for human decisions · The SIFT Core Team</footer>
+  </div>;
 }
