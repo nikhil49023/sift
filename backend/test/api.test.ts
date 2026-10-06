@@ -5,14 +5,15 @@ import {once} from 'node:events';
 import {app} from '../src/app.ts';
 import {pool} from '../src/db.ts';
 import {config} from '../src/config.ts';
-import {createPdf} from '../src/reports.ts';
+import {createPdf,generateReport,localReportPath} from '../src/reports.ts';
+import {rm} from 'node:fs/promises';
 test('dossier is a real PDF with a provenance section',async()=>{
   const pdf=await createPdf({candidate:{name:'Synthetic fixture'},auditId:randomUUID(),generatedAt:'2026-01-01',findings:[],sources:[],decisions:[],manifestHash:'test hash'});
   assert.equal(pdf.subarray(0,4).toString(),'%PDF');assert.ok(pdf.length>1000);
 });
 test('tenant isolation, idempotency, role enforcement and persistent audit state',{skip:process.env.INTEGRATION_TESTS!=='true'},async()=>{
   const server=app.listen(0,'127.0.0.1');await once(server,'listening');const address=server.address() as {port:number};const base=`http://127.0.0.1:${address.port}`;
-  const foreign=randomUUID(),foreignCandidate=randomUUID(),foreignAudit=randomUUID(),foreignCohort=randomUUID();let cohortId:string|undefined;const audits:string[]=[];
+  const foreign=randomUUID(),foreignCandidate=randomUUID(),foreignAudit=randomUUID(),foreignCohort=randomUUID();let cohortId:string|undefined,reportId:string|undefined;const audits:string[]=[];
   const request=async(path:string,body?:unknown,method=body?'POST':'GET',key?:string)=>fetch(base+path,{method,headers:{'Content-Type':'application/json',...(key?{'Idempotency-Key':key}:{})},body:body?JSON.stringify(body):undefined});
   try {
     await pool.query('INSERT INTO organizations(id,name) VALUES($1,\'Synthetic tenant fixture\')',[foreign]);
@@ -31,11 +32,17 @@ test('tenant isolation, idempotency, role enforcement and persistent audit state
     await pool.query('UPDATE memberships SET role=\'viewer\' WHERE org_id=$1 AND user_id=$2',[config.LOCAL_ORG_ID,config.LOCAL_USER_ID]);
     assert.equal((await request('/api/cohorts',{name:'Forbidden',workflow:'hackathon'})).status,403);
     await pool.query('UPDATE memberships SET role=\'admin\' WHERE org_id=$1 AND user_id=$2',[config.LOCAL_ORG_ID,config.LOCAL_USER_ID]);
+    await pool.query('UPDATE audits SET status=\'partial\',assessment=$2 WHERE id=$1',[job.id,{summary:'Synthetic report fixture',overallScore:null,dimensions:{},coverage:[]}]);
+    const reportResponse=await request(`/api/audits/${job.id}/reports`,{});assert.equal(reportResponse.status,202);reportId=(await reportResponse.json()).id;
+    await generateReport(reportId!,config.LOCAL_ORG_ID);
+    const download=await request(`/api/reports/${reportId}/download`);assert.equal(download.status,200);assert.equal(download.headers.get('content-type'),'application/pdf');assert.equal(Buffer.from(await download.arrayBuffer()).subarray(0,4).toString(),'%PDF');
+    await pool.query('UPDATE audits SET status=\'running\' WHERE id=$1',[job.id]);
     assert.equal((await request(`/api/audits/${job.id}/cancel`,{})).status,200);
     assert.equal((await (await request(`/api/audits/${job.id}`)).json()).status,'cancelled');
   } finally {
     await pool.query('UPDATE memberships SET role=\'admin\' WHERE org_id=$1 AND user_id=$2',[config.LOCAL_ORG_ID,config.LOCAL_USER_ID]);
     for(const id of audits)await pool.query('DELETE FROM outbox WHERE payload->>\'auditId\'=$1',[id]);
+    if(reportId){await pool.query('DELETE FROM outbox WHERE payload->>\'reportId\'=$1',[reportId]);await rm(localReportPath(`${config.LOCAL_ORG_ID}/${reportId}.pdf`),{force:true});}
     if(cohortId)await pool.query('DELETE FROM cohorts WHERE id=$1 AND org_id=$2',[cohortId,config.LOCAL_ORG_ID]);
     await pool.query('DELETE FROM organizations WHERE id=$1',[foreign]);
     await new Promise<void>(resolve=>server.close(()=>resolve()));

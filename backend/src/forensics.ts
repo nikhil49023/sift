@@ -21,17 +21,24 @@ export function javascriptFacts(content:string,typescript=false):FunctionFact[] 
   walk(ast);return functions;
 }
 export function pythonFacts(content:string):Promise<FunctionFact[]> {
+  return isolatedFacts('python3',['-I',fileURLToPath(new URL('../scripts/python_ast.py',import.meta.url))],{content});
+}
+export function isolatedJavascriptFacts(content:string,typescript=false):Promise<FunctionFact[]> {
+  return isolatedFacts(process.execPath,['--max-old-space-size=256',fileURLToPath(new URL('../scripts/javascript_ast.mjs',import.meta.url))],{content,typescript});
+}
+function isolatedFacts(executable:string,args:string[],input:object):Promise<FunctionFact[]> {
   return new Promise((resolve,reject)=>{
-    const child=spawn('python3',['-I',fileURLToPath(new URL('../scripts/python_ast.py',import.meta.url))],{stdio:['pipe','pipe','pipe']});
-    let output='';const timer=setTimeout(()=>child.kill('SIGKILL'),3000);
+    const child=spawn(executable,args,{stdio:['pipe','pipe','ignore']});
+    let output='';const timer=setTimeout(()=>child.kill('SIGKILL'),5000);
     child.stdout.on('data',chunk=>{output+=chunk;if(output.length>2*1024*1024)child.kill('SIGKILL');});
     child.on('error',error=>{clearTimeout(timer);reject(error);});
-    child.on('close',code=>{clearTimeout(timer);try{if(code!==0)throw new Error('Python parser failed');const result=JSON.parse(output);if(result.error)throw new Error(result.error);resolve(result.functions);}catch(error){reject(error);}});
-    child.stdin.end(JSON.stringify({content}));
+    child.on('close',code=>{clearTimeout(timer);try{if(code!==0)throw new Error('AST parser failed');const result=JSON.parse(output);if(result.error)throw new Error(result.error);resolve(result.functions);}catch(error){reject(error);}});
+    child.stdin.on('error',()=>{});
+    child.stdin.end(JSON.stringify(input));
   });
 }
 export async function inspect(snapshot:Snapshot,input:AuditSubmission):Promise<Finding[]> {
-  const finding=(pillar:string,status:Finding['status'],observations:string[],evidenceIds:string[],coverage:string):Finding=>({pillar,status,observations,evidenceIds,coverage,ruleVersion:RULE_VERSION});
+  const finding=(pillar:string,status:Finding['status'],observations:string[],evidenceIds:string[],coverage:string):Finding=>({repository:snapshot.repository,pillar,status,observations,evidenceIds,coverage,ruleVersion:RULE_VERSION});
   const history=snapshot.evidence.find(e=>e.path==='history.json');const commits=snapshot.commits;
   const findings:Finding[]=[];
   const sprint=input.sprint;
@@ -57,9 +64,9 @@ export async function inspect(snapshot:Snapshot,input:AuditSubmission):Promise<F
   const facts:{evidenceId:string;path:string;functions:FunctionFact[]}[]=[];let unsupported=0,failed=0;
   for(const evidence of snapshot.evidence.filter(e=>e.kind==='code')) {
     if(/(^|\/)(__tests__|tests?|fixtures|mocks)(\/|$)|\.(test|spec)\./i.test(evidence.path))continue;
-    try{if(/\.(js|jsx|ts|tsx)$/.test(evidence.path))facts.push({evidenceId:evidence.id,path:evidence.path,functions:javascriptFacts(evidence.content,/\.tsx?$/.test(evidence.path))});
+    try{if(/\.(js|jsx|ts|tsx)$/.test(evidence.path))facts.push({evidenceId:evidence.id,path:evidence.path,functions:await isolatedJavascriptFacts(evidence.content,/\.tsx?$/.test(evidence.path))});
     else if(evidence.path.endsWith('.py'))facts.push({evidenceId:evidence.id,path:evidence.path,functions:await pythonFacts(evidence.content)});
-    else if(!/\.(md|json|yml|yaml|txt|toml|ini|html|css)$/i.test(evidence.path))unsupported++;}
+    else if(/\.(rs|go|java|cpp|c|h|cs|rb|php|swift|kt|dart|scala|ex|exs|r|lua|m|mm|zig)$/i.test(evidence.path))unsupported++;}
     catch{failed++;snapshot.coverage.complete=false;snapshot.coverage.limitations.push(`AST parser could not analyze ${evidence.path}`);}
   }
   const hollow=facts.flatMap(f=>f.functions.filter(n=>n.empty||n.placeholder).map(n=>({...n,evidenceId:f.evidenceId,path:f.path})));

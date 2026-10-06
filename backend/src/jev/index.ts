@@ -22,6 +22,7 @@ export function validateJudgment(value:unknown,evidence:Evidence[]):Judgment {
     const item=result.dimensions[dimension];
     if(item.level!==null&&item.citations.length===0)throw new Error(`Scored dimension ${dimension} has no citation`);
     const sources=item.citations.map(validateCitation);
+    if(item.level===0&&dimension==='testingVerification'&&sources.some(e=>e.path==='source-index.json'&&JSON.parse(e.content).complete!==true))throw new Error('Absence cannot be scored from an incomplete source index');
     if(item.level!==null&&['systemsRigor','algorithmicDepth'].includes(dimension)&&!sources.some(e=>e.kind==='code'))throw new Error(`${dimension} requires source-code evidence`);
     if(item.level!==null&&dimension==='collaborationHygiene'&&!sources.some(e=>['commit','review'].includes(e.kind)))throw new Error('Collaboration score requires commit or review evidence');
     if(item.level!==null&&dimension==='testingVerification'&&!sources.some(e=>e.kind==='ci'||e.kind==='code'&&/(^|\/)(tests?|__tests__)(\/|$)|\.(test|spec)\./.test(e.path)||e.path==='source-index.json'&&item.level===0))throw new Error('Testing score requires test/CI evidence or complete source index for level zero');
@@ -49,6 +50,7 @@ export async function judge(snapshots:Snapshot[],findings:Finding[],input:AuditS
   let correction='';
   for(let attempt=0;attempt<2;attempt++) {
     const response=await client.models.generateContent({model:config.GEMINI_MODEL,contents:JSON.stringify({evidence:packet,findings,coverage:snapshots.map(s=>({repository:s.repository,...s.coverage})),jobDescription:input.jobDescription||null,packetCoverage:{selected:packet.length,total:all.length},correction}),config:{systemInstruction:SYSTEM_PROMPT,responseMimeType:'application/json',responseJsonSchema:z.toJSONSchema(JudgeOutput),temperature:0}});
+    console.log(JSON.stringify({event:'judge_usage',model:config.GEMINI_MODEL,attempt:attempt+1,inputTokens:response.usageMetadata?.promptTokenCount,outputTokens:response.usageMetadata?.candidatesTokenCount,totalTokens:response.usageMetadata?.totalTokenCount}));
     try{const result=validateJudgment(JSON.parse(response.text||''),packet);if(!input.jobDescription&&result.roleFit)throw new Error('Role fit requires a job description');return result;}
     catch(error){correction=`The previous response was rejected: ${error instanceof Error?error.message:'invalid output'}. Return a corrected response using only packet evidence.`;}
   }
@@ -60,7 +62,7 @@ export function synthesize(snapshots:Snapshot[],findings:Finding[],judgment:Judg
   const riskLevel=findings.some(f=>f.status==='FAIL')?'FLAGGED':findings.some(f=>f.status==='WARN')?'REVIEW_REQUIRED':findings.some(f=>f.status==='UNKNOWN')?'INSUFFICIENT_EVIDENCE':'NO_FLAGS_OBSERVED';
   const evidence=snapshots.flatMap(s=>s.evidence);
   const citationIds=new Set(DIMENSIONS.flatMap(k=>judgment.dimensions[k].citations.map(c=>c.evidenceId)));
-  return {overallScore,rankable:complete&&config.RANKINGS_ENABLED==='true',riskLevel,summary:judgment.summary,roleFit:judgment.roleFit,dimensions:judgment.dimensions,
+  return {overallScore,rankable:complete,riskLevel,summary:judgment.summary,roleFit:judgment.roleFit,dimensions:judgment.dimensions,
     citations:evidence.filter(e=>citationIds.has(e.id)).map(({id,path,repository,sha,sourceUrl,hash,retrievedAt})=>({id,path,repository,sha,sourceUrl,hash,retrievedAt})),
     coverage:snapshots.map(s=>({repository:s.repository,sha:s.sha,...s.coverage})),
     versions:{rules:RULE_VERSION,rubric:RUBRIC_VERSION,prompt:PROMPT_VERSION,model:config.GEMINI_API_KEY?config.GEMINI_MODEL:null},

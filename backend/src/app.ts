@@ -10,6 +10,7 @@ import { config,local } from './config.ts';
 import { authenticate,tenant,writable,admin,HttpError,supabase } from './auth.ts';
 import { pages,githubRequest } from './github.ts';
 import { reportDownload } from './reports.ts';
+import {openapi} from './openapi.ts';
 
 const uuid=(value:unknown)=>z.uuid().parse(value);
 const safeAudit=(row:any)=>{const {snapshots,...rest}=row;return {...rest,snapshots:snapshots?.map((s:any)=>({repository:s.repository,sha:s.sha,coverage:s.coverage})),input:{...row.input,jobDescription:row.input?.jobDescription}};};
@@ -21,6 +22,7 @@ app.use(express.json({limit:'2mb'}));app.use(rateLimit({windowMs:60000,limit:120
 app.get('/health',async(_req,res)=>{try{await pool.query('SELECT 1');res.json({status:'ok'});}catch{res.status(503).json({status:'unavailable'});}});
 app.get('/api/config',(_req,res)=>res.json({authMode:config.AUTH_MODE,supabaseUrl:config.SUPABASE_URL||null,supabaseAnonKey:config.SUPABASE_ANON_KEY||null,rankingsEnabled:config.RANKINGS_ENABLED==='true',rubricVersion:RUBRIC_VERSION}));
 app.use('/api',authenticate);
+app.get('/api/openapi.json',(_req,res)=>res.json(openapi));
 app.get('/api/organizations',async(req,res)=>res.json((await pool.query('SELECT o.*,m.role FROM organizations o JOIN memberships m ON m.org_id=o.id WHERE m.user_id=$1 ORDER BY o.created_at',[req.userId])).rows));
 app.post('/api/organizations',async(req,res)=>{
   if(local)throw new HttpError(400,'Local mode already provides a development organization');
@@ -57,8 +59,9 @@ app.post('/api/audits',async(req,res)=>{
     if(prior.rowCount){if(prior.rows[0].request_hash!==hash)throw new HttpError(409,'Idempotency key already used for a different submission');return {id:prior.rows[0].audit_id,reused:true};}
     const cohort=await c.query('SELECT workflow FROM cohorts WHERE id=$1 AND org_id=$2',[input.cohortId,org]);if(!cohort.rowCount)throw new HttpError(404,'Cohort not found');if(cohort.rows[0].workflow!==input.workflow)throw new HttpError(400,'Submission workflow must match its cohort');
     const active=await c.query('SELECT count(*) FROM audits WHERE org_id=$1 AND status IN (\'queued\',\'running\')',[org]);if(Number(active.rows[0].count)>=2)throw new HttpError(429,'Organization already has two active audits');
-    const candidateId=randomUUID(),id=randomUUID();
-    await c.query('INSERT INTO candidates(id,org_id,cohort_id,name,username) VALUES($1,$2,$3,$4,$5)',[candidateId,org,input.cohortId,input.candidateName,input.githubUsername||null]);
+    const candidateId=input.candidateId||randomUUID(),id=randomUUID();
+    if(input.candidateId){const candidate=await c.query('SELECT 1 FROM candidates WHERE id=$1 AND org_id=$2 AND cohort_id=$3',[candidateId,org,input.cohortId]);if(!candidate.rowCount)throw new HttpError(404,'Candidate not found in this cohort');}
+    else await c.query('INSERT INTO candidates(id,org_id,cohort_id,name,username) VALUES($1,$2,$3,$4,$5)',[candidateId,org,input.cohortId,input.candidateName,input.githubUsername||null]);
     await c.query('INSERT INTO audits(id,org_id,candidate_id,input,created_by) VALUES($1,$2,$3,$4,$5)',[id,org,candidateId,input,req.userId]);
     await c.query('INSERT INTO idempotency(org_id,key,request_hash,audit_id) VALUES($1,$2,$3,$4)',[org,key,hash,id]);
     await c.query('INSERT INTO outbox(id,org_id,kind,payload) VALUES($1,$2,\'audit\',$3)',[randomUUID(),org,{auditId:id,orgId:org}]);
@@ -66,7 +69,20 @@ app.post('/api/audits',async(req,res)=>{
   });res.status(202).json(result);
 });
 app.get('/api/audits/:id',async(req,res)=>res.json(safeAudit(await ownedAudit(req.context.orgId,String(req.params.id)))));
-app.post('/api/audits/:id/cancel',async(req,res)=>{writable(req.context);const row=await ownedAudit(req.context.orgId,String(req.params.id));if(['queued','running'].includes(row.status))await pool.query('UPDATE audits SET cancelled=true,status=\'cancelled\',updated_at=now() WHERE id=$1 AND org_id=$2',[row.id,req.context.orgId]);res.json({id:row.id,status:'cancelled'});});
+app.post('/api/audits/:id/retry',async(req,res)=>{
+  writable(req.context);const id=uuid(req.params.id),org=req.context.orgId;
+  await transaction(async c=>{
+    await c.query('SELECT id FROM organizations WHERE id=$1 FOR UPDATE',[org]);
+    const audit=(await c.query('SELECT * FROM audits WHERE id=$1 AND org_id=$2 FOR UPDATE',[id,org])).rows[0];if(!audit)throw new HttpError(404,'Audit not found');
+    if(!['failed','partial','cancelled'].includes(audit.status))throw new HttpError(409,'Only failed, partial or cancelled audits can retry');
+    const active=(await c.query('SELECT count(*) FROM audits WHERE org_id=$1 AND status IN (\'queued\',\'running\')',[org])).rows[0].count;if(Number(active)>=2)throw new HttpError(429,'Organization already has two active audits');
+    if(audit.snapshots.length&&!(await c.query('SELECT 1 FROM evidence WHERE audit_id=$1 AND org_id=$2 AND expires_at>now() LIMIT 1',[id,org])).rowCount)throw new HttpError(409,'Evidence retention expired; create a new audit');
+    const stages={...audit.stages};delete stages.judge;delete stages.synthesizer;
+    await c.query('UPDATE audits SET status=\'queued\',cancelled=false,error=NULL,judgment=NULL,assessment=NULL,stages=$3,updated_at=now() WHERE id=$1 AND org_id=$2',[id,org,stages]);
+    await c.query('INSERT INTO outbox(id,org_id,kind,payload) VALUES($1,$2,\'audit\',$3)',[randomUUID(),org,{auditId:id,orgId:org}]);
+  });res.status(202).json({id,status:'queued'});
+});
+app.post('/api/audits/:id/cancel',async(req,res)=>{writable(req.context);const row=await ownedAudit(req.context.orgId,String(req.params.id));const active=['queued','running'].includes(row.status);if(active)await pool.query('UPDATE audits SET cancelled=true,status=\'cancelled\',updated_at=now() WHERE id=$1 AND org_id=$2',[row.id,req.context.orgId]);res.json({id:row.id,status:active?'cancelled':row.status});});
 app.get('/api/audits/:id/evidence',async(req,res)=>{
   await ownedAudit(req.context.orgId,String(req.params.id));
   const r=await pool.query('SELECT payload FROM evidence WHERE org_id=$1 AND audit_id=$2 AND expires_at>now() ORDER BY id',[req.context.orgId,req.params.id]);
@@ -100,7 +116,7 @@ app.post('/api/audits/:id/reports',async(req,res)=>{
   const id=randomUUID();await transaction(async c=>{await c.query('INSERT INTO reports(id,audit_id,org_id) VALUES($1,$2,$3)',[id,audit.id,req.context.orgId]);await c.query('INSERT INTO outbox(id,org_id,kind,payload) VALUES($1,$2,\'report\',$3)',[randomUUID(),req.context.orgId,{reportId:id,orgId:req.context.orgId}]);});res.status(202).json({id,status:'queued'});
 });
 app.get('/api/reports/:id',async(req,res)=>{const r=await pool.query('SELECT * FROM reports WHERE id=$1 AND org_id=$2',[uuid(req.params.id),req.context.orgId]);if(!r.rowCount)throw new HttpError(404,'Report not found');res.json({...r.rows[0],downloadUrl:r.rows[0].status==='completed'?await reportDownload(r.rows[0]):null});});
-app.get('/api/reports/:id/download',async(req,res)=>{if(!local)throw new HttpError(404,'Use the private signed download URL');const r=await pool.query('SELECT * FROM reports WHERE id=$1 AND org_id=$2 AND status=\'completed\'',[uuid(req.params.id),req.context.orgId]);if(!r.rowCount)throw new HttpError(404,'Report not found');const {localReportPath}=await import('./reports.ts');res.download(localReportPath(r.rows[0].object_path),'sift-dossier.pdf');});
+app.get('/api/reports/:id/download',async(req,res)=>{if(!local)throw new HttpError(404,'Use the private signed download URL');const r=await pool.query('SELECT * FROM reports WHERE id=$1 AND org_id=$2 AND status=\'completed\'',[uuid(req.params.id),req.context.orgId]);if(!r.rowCount)throw new HttpError(404,'Report not found');const {localReportPath}=await import('./reports.ts');res.download(localReportPath(r.rows[0].object_path),'sift-dossier.pdf',{dotfiles:'allow'});});
 app.post('/api/template-corpus',async(req,res)=>{
   admin(req.context);const input=z.object({version:z.string().min(1).max(100),repository:Repository,sha:z.string().regex(/^[a-f0-9]{40}$/),license:z.string().min(1).max(200)}).strict().parse(req.body);
   const [owner,repo]=input.repository.split('/');const tree=await githubRequest('GET /repos/{owner}/{repo}/git/trees/{tree_sha}',{owner,repo,tree_sha:input.sha,recursive:'1'});if(tree.data.truncated)throw new HttpError(400,'Template tree is truncated');

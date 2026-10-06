@@ -48,8 +48,8 @@ export async function runAudit(id:string,orgId:string){
             findings.push(...await inspect(snapshot,row.input));
             if(corpus.length){const matches=corpus.flatMap(template=>template.entries.filter((e:any)=>!excludedPath(e.path)&&Object.values(snapshot.metadata.blobHashes||{}).includes(e.sha)).map((e:any)=>({template:template.repository,version:template.version,templateSha:template.sha,templatePath:e.path,blob:e.sha,sourceUrl:`https://github.com/${template.repository}/blob/${template.sha}/${e.path}`})));
               const evidence=makeEvidence(snapshot.repository,snapshot.sha,'comparison','template-comparison.json',JSON.stringify({templates:corpus.map(c=>({repository:c.repository,version:c.version,sha:c.sha,license:c.source_license})),matches},null,2),`https://github.com/${snapshot.repository}/tree/${snapshot.sha}`);snapshot.evidence.push(evidence);
-              const index=findings.findIndex(f=>f.pillar==='similarity'&&f.status==='UNKNOWN');
-              const finding={pillar:'similarity',status:matches.length?'WARN' as const:'PASS' as const,observations:[`${matches.length} blobs match the approved template corpus. Reuse is not itself misconduct.`,'Comparison coverage is limited to configured templates and declared upstream.'],evidenceIds:[evidence.id],coverage:`${corpus.length} revision-pinned templates`,ruleVersion:'forensics-v1'};
+              const index=findings.findIndex(f=>f.repository===snapshot.repository&&f.pillar==='similarity'&&f.status==='UNKNOWN');
+              const finding={repository:snapshot.repository,pillar:'similarity',status:matches.length?'WARN' as const:'PASS' as const,observations:[`${matches.length} blobs match the approved template corpus. Reuse is not itself misconduct.`,'Comparison coverage is limited to configured templates and declared upstream.'],evidenceIds:[evidence.id],coverage:`${corpus.length} revision-pinned templates`,ruleVersion:'forensics-v1'};
               if(index>=0)findings[index]=finding;else findings.push(finding);
             }
           }

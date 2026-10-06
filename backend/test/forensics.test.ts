@@ -1,11 +1,13 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {javascriptFacts,pythonFacts,inspect} from '../src/forensics.ts';
+import {javascriptFacts,isolatedJavascriptFacts,pythonFacts,inspect} from '../src/forensics.ts';
 import {makeEvidence,parseLog,excludedPath} from '../src/ingestion.ts';
 import type {Snapshot,AuditSubmission} from '@sift/contracts';
 test('AST parsers detect real empty bodies without executing source',async()=>{
   const js=javascriptFacts('function pending() {} function simple() { return 1; }');
   assert.equal(js[0].empty,true);assert.equal(js[1].empty,false);
+  const byName=(a:{name:string},b:{name:string})=>a.name.localeCompare(b.name);
+  assert.deepEqual((await isolatedJavascriptFacts('function pending() {} function simple() { return 1; }')).sort(byName),[...js].sort(byName));
   const py=await pythonFacts('import os\ndef pending():\n    pass\ndef simple():\n    return 1\n');
   assert.equal(py[0].empty,true);assert.equal(py[1].empty,false);
 });
