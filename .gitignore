@@ -29,6 +29,10 @@ dist-ssr
 .env.local
 .env.*.local
 *.pem
+.data/
+coverage/
+test-results/
+playwright-report/
 
 # Python
 __pycache__/
