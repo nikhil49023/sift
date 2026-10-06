@@ -1,4 +1,6 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
+dotenv.config({ path: fileURLToPath(new URL("../../.env", import.meta.url)), quiet: true });
 import { z } from "zod";
 const Env = z.object({
   NODE_ENV: z
