@@ -9,7 +9,8 @@ Prepared for **The SIFT Core Team**. The default `render.yaml` now uses free com
 - The free `sift-queue` has been provisioned in Singapore with `noeviction`, no disk persistence, and an empty external IP allow list. Its status is available.
 - The supplied Supabase URL and publishable key are saved only in the ignored root `.env`. Its public Auth settings endpoint returned HTTP 200.
 - Supabase MCP is configured for the supplied project with `read_only=true`, and OAuth login succeeded. MCP access is for development; it is not a runtime database credential.
-- The API is not published yet. Its remaining settings are `DATABASE_URL`, `DATABASE_CA_BASE64`, `SUPABASE_SECRET_KEY`, and a working `GROQ_API_KEY`. The existing Groq MCP key returned HTTP 401 and was not copied into SIFT.
+- The Supabase server key now passes live Admin Auth and Storage checks. The private `sift-private` report bucket has been created with a 10 MiB file limit and PDF-only uploads.
+- The API is not published yet. `DATABASE_URL` and `GROQ_API_KEY` are missing. `DATABASE_CA_BASE64` is also absent; a live database TLS probe will determine whether trusted system roots suffice or the project's CA is needed. The existing Groq MCP credential has failed upstream checks and was not copied into SIFT.
 
 ## Free layout and limits
 
@@ -41,12 +42,14 @@ Set these in the ignored root `.env` for local deployment preparation and in Ren
 | `SUPABASE_ANON_KEY` | Publishable key, already supplied |
 | `SUPABASE_SECRET_KEY` | Server secret/service-role key; never a browser variable |
 | `DATABASE_URL` | Connect panel's session pooler string on port 5432, with a percent-encoded database password |
-| `DATABASE_CA_BASE64` | Base64 PEM database root certificate |
+| `DATABASE_CA_BASE64` | Base64 PEM database root certificate, if required for verified TLS; system trust is allowed when the live probe succeeds |
 | `GROQ_API_KEY` | Valid Groq key with access/quota for the configured model |
 | `CORS_ORIGIN` | Exact frontend origin; localhost 5173 can be used until frontend publishing |
 | `GITHUB_TOKEN` | Optional token suitable for public repository metadata, to increase GitHub API allowance |
 
 Remove SSL query parameters from `DATABASE_URL`; SIFT configures certificate verification explicitly. Transaction pooling on port 6543 is unsuitable because audit execution uses session advisory locks. [Supabase connections and TLS](https://supabase.com/docs/guides/database/connecting-to-postgres).
+
+Run `npm run check:secrets -w backend` to verify saved runtime settings without printing them. It performs read-only Auth, private bucket, Groq model availability, and PostgreSQL TLS/login checks. It does not run model inference, apply migrations, upload reports, or create accounts. The Supabase MCP login and publishable key cannot supply an existing database password. [Supabase integration credentials](https://supabase.com/docs/guides/integrations/build-a-supabase-oauth-integration).
 
 Enable email sign-in and allow the actual frontend URL in Supabase's Site URL/redirect configuration. Keep local `AUTH_MODE=local` until the production database/server settings are available; Render always sets `NODE_ENV=production` and `AUTH_MODE=supabase`. Local bypass authentication cannot run in production. [Supabase redirects](https://supabase.com/docs/guides/auth/redirect-urls).
 

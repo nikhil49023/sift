@@ -9,6 +9,7 @@
     "worker": "tsx src/worker.ts",
     "migrate": "tsx scripts/migrate.ts",
     "retention": "tsx scripts/retention.ts",
+    "check:secrets": "tsx scripts/check-secrets.ts",
     "build": "tsc --noEmit",
     "test": "tsx --test --test-concurrency=1 test/*.test.ts"
   },
