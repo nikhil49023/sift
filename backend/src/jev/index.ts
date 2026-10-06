@@ -194,6 +194,7 @@ export function synthesize(
   judgment: Judgment,
 ) {
   const complete =
+    snapshots.length > 0 &&
     snapshots.every((s) => s.coverage.complete) &&
     DIMENSIONS.every((k) => judgment.dimensions[k].level !== null);
   const overallScore = complete
@@ -204,7 +205,7 @@ export function synthesize(
         ) * 10,
       ) / 10
     : null;
-  const riskLevel = findings.some((f) => f.status === "FAIL")
+  const riskLevel = !snapshots.length ? "INSUFFICIENT_EVIDENCE" : findings.some((f) => f.status === "FAIL")
     ? "FLAGGED"
     : findings.some((f) => f.status === "WARN")
       ? "REVIEW_REQUIRED"
@@ -212,11 +213,12 @@ export function synthesize(
         ? "INSUFFICIENT_EVIDENCE"
         : "NO_FLAGS_OBSERVED";
   const evidence = snapshots.flatMap((s) => s.evidence);
-  const citationIds = new Set(
-    DIMENSIONS.flatMap((k) =>
+  const citationIds = new Set([
+    ...DIMENSIONS.flatMap((k) =>
       judgment.dimensions[k].citations.map((c) => c.evidenceId),
     ),
-  );
+    ...(judgment.roleFit?.citations || []).map(c=>c.evidenceId),
+  ]);
   return {
     overallScore,
     rankable: complete,

@@ -18,6 +18,11 @@ test('missing dimensional evidence withholds overall score',()=>{
   assert.equal(synthesize([snapshot],[],incompleteJudgment('missing evidence')).overallScore,null);
   const j=incompleteJudgment('test');for(const k of DIMENSIONS)j.dimensions[k].level=4;
   assert.equal(synthesize([snapshot],[],j).overallScore,100);
+  assert.equal(synthesize([],[],j).overallScore,null);
+  j.roleFit={rationale:'Synthetic role-fit fixture',citations:[{evidenceId:code.id,startLine:1,endLine:1,excerpt:'first line'}]};
+  const assessment=synthesize([snapshot],[],j);
+  assert.equal(assessment.evidenceManifest[0].id,code.id);
+  assert.equal(assessment.citations[0].id,code.id);
   snapshot.coverage.complete=false;assert.equal(synthesize([snapshot],[],j).overallScore,null);
 });
 test('a plausible narrative alone cannot score a dimension',()=>{

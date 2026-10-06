@@ -94,6 +94,9 @@ export function createPdf(manifest: any): Promise<Buffer> {
     if (manifest.assessment?.roleFit) {
       heading("Role fit");
       document.text(manifest.assessment.roleFit.rationale);
+      for (const citation of manifest.assessment.roleFit.citations || []) {
+        document.text(`[${citation.evidenceId}] ${citation.startLine ? `lines ${citation.startLine}-${citation.endLine}` : ''}\n${citation.excerpt}`);
+      }
     }
     heading("Source references");
     for (const source of manifest.sources) {
