@@ -1,6 +1,43 @@
 {
-  "name":"@sift/backend","private":true,"type":"module","version":"1.0.0",
-  "scripts":{"dev":"tsx watch src/server.ts","start":"tsx src/server.ts","worker":"tsx src/worker.ts","migrate":"tsx scripts/migrate.ts","build":"tsc --noEmit","test":"tsx --test --test-concurrency=1 test/*.test.ts"},
-  "dependencies":{"@sift/contracts":"1.0.0","@babel/parser":"^7.28.0","@google/genai":"^1.0.0","@octokit/rest":"^22.0.0","@supabase/supabase-js":"^2.57.0","bullmq":"^5.58.0","cors":"^2.8.5","dotenv":"^17.2.0","express":"^5.1.0","express-rate-limit":"^8.1.0","helmet":"^8.1.0","ioredis":"^5.7.0","papaparse":"^5.5.3","pdfkit":"^0.17.2","pg":"^8.16.0","zod":"^4.0.0"},
-  "devDependencies":{"@types/cors":"^2.8.19","@types/express":"^5.0.3","@types/node":"^22.18.0","@types/papaparse":"^5.3.16","@types/pdfkit":"^0.17.3","@types/pg":"^8.15.5","tsx":"^4.20.0","typescript":"^5.9.0"}
+  "name": "@sift/backend",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "worker": "tsx src/worker.ts",
+    "migrate": "tsx scripts/migrate.ts",
+    "retention": "tsx scripts/retention.ts",
+    "build": "tsc --noEmit",
+    "test": "tsx --test --test-concurrency=1 test/*.test.ts"
+  },
+  "dependencies": {
+    "@sift/contracts": "1.0.0",
+    "@babel/parser": "^7.28.0",
+    "@google/genai": "^1.0.0",
+    "@octokit/rest": "^22.0.0",
+    "@supabase/supabase-js": "^2.57.0",
+    "bullmq": "^5.58.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.7.0",
+    "papaparse": "^5.5.3",
+    "pdfkit": "^0.17.2",
+    "pg": "^8.16.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.18.0",
+    "@types/papaparse": "^5.3.16",
+    "@types/pdfkit": "^0.17.3",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
 }

@@ -1,16 +1,322 @@
-import React, { useState } from 'react';
-import { Search, GitBranch, LoaderCircle } from 'lucide-react';
-const stages = ['scout', 'forensics', 'judge', 'synthesizer'];
-const labels = ['Collect evidence', 'Inspect code & history', 'Evaluate JEV rubric', 'Assemble assessment'];
-export default function AuditInput({ workflow, onSubmit, disabled, audit, onCancel, discoverProfile }) {
-  const [name, setName] = useState(''), [repositories, setRepositories] = useState(''), [team, setTeam] = useState(''), [start, setStart] = useState(''), [end, setEnd] = useState(''), [jobDescription, setJobDescription] = useState(''), [profile, setProfile] = useState(''), [discovered, setDiscovered] = useState([]), [chosen, setChosen] = useState([]), [message, setMessage] = useState(''), [discovering, setDiscovering] = useState(false);
-  const active = audit && ['queued', 'running'].includes(audit.status);
-  return <section className="panel"><div className="flex items-center gap-3 mb-4"><GitBranch className="text-cyan-400" /><div><h1 className="text-xl font-bold">{workflow === 'hackathon' ? 'Audit a hackathon submission' : 'Review a candidate’s engineering evidence'}</h1><p className="text-sm text-slate-400 mt-1">Public GitHub snapshots, scoped forensic observations, and cited evaluations.</p></div></div>
-    {workflow === 'recruiting' && <div className="mb-4 p-3 border border-slate-800 rounded-xl"><div className="flex flex-wrap items-end gap-2"><label className="field flex-1">Discover a GitHub profile<input value={profile} onChange={e => setProfile(e.target.value)} placeholder="GitHub username" /></label><button className="button secondary" disabled={!profile || discovering || disabled} onClick={async () => { setDiscovering(true); setMessage(''); try { const result = await discoverProfile(profile.replace(/^https:\/\/github\.com\//, '').replace(/\/$/, '')); setDiscovered(result.repositories); setChosen([]); if (!result.complete) setMessage('Showing the first 200 repositories; you can enter a repository directly.'); } catch (e) { setMessage(e.message); } finally { setDiscovering(false); } }}><Search size={15} />Find repositories</button></div><div className="max-h-48 overflow-auto mt-2">{discovered.map(repo => <label key={repo.name} className="flex items-start gap-2 text-sm py-2"><input type="checkbox" checked={chosen.includes(repo.name)} disabled={disabled || !chosen.includes(repo.name) && chosen.length >= 5} onChange={e => setChosen(current => e.target.checked ? [...current, repo.name] : current.filter(r => r !== repo.name))} /><span>{repo.name}{repo.fork && <span className="text-slate-500 ml-2">fork</span>}</span></label>)}</div></div>}
-    <form onSubmit={e => { e.preventDefault(); setMessage(''); try { if (!!start !== !!end) throw new Error('Supply both sprint boundaries or leave both empty.'); const repos = chosen.length ? chosen : repositories.split(/[\n,]+/).map(r => r.trim()).filter(Boolean); if (!repos.length || repos.length > (workflow === 'hackathon' ? 1 : 5)) throw new Error('Choose one repository for a hackathon, or up to five for recruiting.'); onSubmit({ candidateName: name, repositories: repos, team: workflow === 'hackathon' ? team.split(',').map(t => t.trim()).filter(Boolean) : [], ...(start && end ? { sprint: { start: new Date(start).toISOString(), end: new Date(end).toISOString() } } : {}), ...(workflow === 'recruiting' && jobDescription ? { jobDescription } : {}) }); } catch (e) { setMessage(e.message); } }}>
-      <div className="grid md:grid-cols-2 gap-4"><label className="field">{workflow === 'hackathon' ? 'Team / submission name' : 'Candidate name'}<input required maxLength={200} value={name} onChange={e => setName(e.target.value)} disabled={disabled || active} /></label><label className="field">{chosen.length ? `${chosen.length} repositories selected above` : 'Repository URL or owner/repository'}<input required={!chosen.length} value={repositories} onChange={e => setRepositories(e.target.value)} placeholder={workflow === 'hackathon' ? 'https://github.com/owner/project' : 'owner/project, owner/another-project'} disabled={disabled || active || chosen.length > 0} /></label>
-        {workflow === 'hackathon' ? <><label className="field">Sprint start (optional, your local time)<input type="datetime-local" value={start} onChange={e => setStart(e.target.value)} disabled={disabled || active} /></label><label className="field">Sprint end (optional, your local time)<input type="datetime-local" value={end} onChange={e => setEnd(e.target.value)} disabled={disabled || active} /></label><label className="field md:col-span-2">Declared team (comma-separated)<input value={team} onChange={e => setTeam(e.target.value)} disabled={disabled || active} placeholder="Names or GitHub handles; identities are reviewed explicitly" /></label></> : <label className="field md:col-span-2">Job description (optional)<textarea rows={3} maxLength={12000} value={jobDescription} onChange={e => setJobDescription(e.target.value)} disabled={disabled || active} placeholder="Role fit is assessed separately from engineering quality." /></label>}
-      </div><p role="status" className="text-amber-300 text-sm mt-3">{message}</p><button className="button mt-3" disabled={disabled || active}>{active ? <LoaderCircle className="animate-spin" size={16} /> : <Search size={16} />}Collect & evaluate evidence</button>
-    </form>{audit && <div className="mt-5 border-t border-slate-800 pt-4" role="status" aria-live="polite"><div className="flex justify-between items-center gap-3"><span className="text-xs text-slate-400">Audit {audit.id.slice(0, 8)} · {audit.status}</span>{active && <button className="text-sm text-amber-300" disabled={disabled} onClick={onCancel}>Cancel audit</button>}</div><ol className="grid sm:grid-cols-4 gap-3 mt-3">{stages.map((stage, i) => <li key={stage} className={`rounded-xl p-3 border text-xs ${audit.stages?.[stage]?.status === 'completed' ? 'border-emerald-800 text-emerald-300' : audit.stage === stage ? 'border-cyan-700 text-cyan-300' : 'border-slate-800 text-slate-500'}`}><span className="block font-semibold">{i + 1}. {labels[i]}</span><span>{audit.stages?.[stage]?.status || 'waiting'}</span></li>)}</ol>{audit.error && <p className="text-amber-300 text-sm mt-3">{audit.error}</p>}</div>}
-  </section>;
+import React, { useEffect, useState } from "react";
+import { Search, GitBranch, LoaderCircle } from "lucide-react";
+const stages = ["scout", "forensics", "judge", "synthesizer"];
+const labels = [
+  "Collect evidence",
+  "Inspect code & history",
+  "Evaluate JEV rubric",
+  "Assemble assessment",
+];
+export default function AuditInput({
+  workflow,
+  onSubmit,
+  disabled,
+  audit,
+  onCancel,
+  onRetry,
+  discoverProfile,
+  existingCandidate,
+}) {
+  const [attach, setAttach] = useState(false);
+  useEffect(() => {
+    setAttach(false);
+  }, [existingCandidate?.id]);
+  const [name, setName] = useState(""),
+    [repositories, setRepositories] = useState(""),
+    [team, setTeam] = useState(""),
+    [start, setStart] = useState(""),
+    [end, setEnd] = useState(""),
+    [jobDescription, setJobDescription] = useState(""),
+    [profile, setProfile] = useState(""),
+    [discovered, setDiscovered] = useState([]),
+    [chosen, setChosen] = useState([]),
+    [message, setMessage] = useState(""),
+    [discovering, setDiscovering] = useState(false);
+  const active = audit && ["queued", "running"].includes(audit.status);
+  return (
+    <section className="panel">
+      <div className="flex items-center gap-3 mb-4">
+        <GitBranch className="text-cyan-400" />
+        <div>
+          <h1 className="text-xl font-bold">
+            {workflow === "hackathon"
+              ? "Audit a hackathon submission"
+              : "Review a candidate’s engineering evidence"}
+          </h1>
+          <p className="text-sm text-slate-400 mt-1">
+            Public GitHub snapshots, scoped forensic observations, and cited
+            evaluations.
+          </p>
+        </div>
+      </div>
+      {workflow === "recruiting" && (
+        <div className="mb-4 p-3 border border-slate-800 rounded-xl">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="field flex-1">
+              Discover a GitHub profile
+              <input
+                value={profile}
+                onChange={(e) => setProfile(e.target.value)}
+                placeholder="GitHub username"
+              />
+            </label>
+            <button
+              className="button secondary"
+              disabled={!profile || discovering || disabled}
+              onClick={async () => {
+                setDiscovering(true);
+                setMessage("");
+                try {
+                  const result = await discoverProfile(
+                    profile
+                      .replace(/^https:\/\/github\.com\//, "")
+                      .replace(/\/$/, ""),
+                  );
+                  setDiscovered(result.repositories);
+                  setChosen([]);
+                  if (!result.complete)
+                    setMessage(
+                      "Showing the first 200 repositories; you can enter a repository directly.",
+                    );
+                } catch (e) {
+                  setMessage(e.message);
+                } finally {
+                  setDiscovering(false);
+                }
+              }}
+            >
+              <Search size={15} />
+              Find repositories
+            </button>
+          </div>
+          <div className="max-h-48 overflow-auto mt-2">
+            {discovered.map((repo) => (
+              <label
+                key={repo.name}
+                className="flex items-start gap-2 text-sm py-2"
+              >
+                <input
+                  type="checkbox"
+                  checked={chosen.includes(repo.name)}
+                  disabled={
+                    disabled ||
+                    (!chosen.includes(repo.name) && chosen.length >= 5)
+                  }
+                  onChange={(e) =>
+                    setChosen((current) =>
+                      e.target.checked
+                        ? [...current, repo.name]
+                        : current.filter((r) => r !== repo.name),
+                    )
+                  }
+                />
+                <span>
+                  {repo.name}
+                  {repo.fork && (
+                    <span className="text-slate-500 ml-2">fork</span>
+                  )}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      {existingCandidate && (
+        <label className="flex gap-2 text-sm text-cyan-300 mb-4">
+          <input
+            type="checkbox"
+            checked={attach}
+            onChange={(e) => {
+              setAttach(e.target.checked);
+              if (e.target.checked) setName(existingCandidate.name);
+            }}
+            disabled={disabled || active}
+          />
+          Attach this audit to {existingCandidate.name}
+        </label>
+      )}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          setMessage("");
+          try {
+            if (!!start !== !!end)
+              throw new Error(
+                "Supply both sprint boundaries or leave both empty.",
+              );
+            const repos = chosen.length
+              ? chosen
+              : repositories
+                  .split(/[\n,]+/)
+                  .map((r) => r.trim())
+                  .filter(Boolean);
+            if (
+              !repos.length ||
+              repos.length > (workflow === "hackathon" ? 1 : 5)
+            )
+              throw new Error(
+                "Choose one repository for a hackathon, or up to five for recruiting.",
+              );
+            onSubmit({
+              candidateName: name,
+              ...(attach ? { candidateId: existingCandidate.id } : {}),
+              repositories: repos,
+              team:
+                workflow === "hackathon"
+                  ? team
+                      .split(",")
+                      .map((t) => t.trim())
+                      .filter(Boolean)
+                  : [],
+              ...(start && end
+                ? {
+                    sprint: {
+                      start: new Date(start).toISOString(),
+                      end: new Date(end).toISOString(),
+                    },
+                  }
+                : {}),
+              ...(workflow === "recruiting" && jobDescription
+                ? { jobDescription }
+                : {}),
+            });
+          } catch (e) {
+            setMessage(e.message);
+          }
+        }}
+      >
+        <div className="grid md:grid-cols-2 gap-4">
+          <label className="field">
+            {workflow === "hackathon"
+              ? "Team / submission name"
+              : "Candidate name"}
+            <input
+              required
+              maxLength={200}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={disabled || active}
+            />
+          </label>
+          <label className="field">
+            {chosen.length
+              ? `${chosen.length} repositories selected above`
+              : "Repository URL or owner/repository"}
+            <input
+              required={!chosen.length}
+              value={repositories}
+              onChange={(e) => setRepositories(e.target.value)}
+              placeholder={
+                workflow === "hackathon"
+                  ? "https://github.com/owner/project"
+                  : "owner/project, owner/another-project"
+              }
+              disabled={disabled || active || chosen.length > 0}
+            />
+          </label>
+          {workflow === "hackathon" ? (
+            <>
+              <label className="field">
+                Sprint start (optional, your local time)
+                <input
+                  type="datetime-local"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                  disabled={disabled || active}
+                />
+              </label>
+              <label className="field">
+                Sprint end (optional, your local time)
+                <input
+                  type="datetime-local"
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                  disabled={disabled || active}
+                />
+              </label>
+              <label className="field md:col-span-2">
+                Declared team (comma-separated)
+                <input
+                  value={team}
+                  onChange={(e) => setTeam(e.target.value)}
+                  disabled={disabled || active}
+                  placeholder="Names or GitHub handles; identities are reviewed explicitly"
+                />
+              </label>
+            </>
+          ) : (
+            <label className="field md:col-span-2">
+              Job description (optional)
+              <textarea
+                rows={3}
+                maxLength={12000}
+                value={jobDescription}
+                onChange={(e) => setJobDescription(e.target.value)}
+                disabled={disabled || active}
+                placeholder="Role fit is assessed separately from engineering quality."
+              />
+            </label>
+          )}
+        </div>
+        <p role="status" className="text-amber-300 text-sm mt-3">
+          {message}
+        </p>
+        <button className="button mt-3" disabled={disabled || active}>
+          {active ? (
+            <LoaderCircle className="animate-spin" size={16} />
+          ) : (
+            <Search size={16} />
+          )}
+          Collect & evaluate evidence
+        </button>
+      </form>
+      {audit && (
+        <div
+          className="mt-5 border-t border-slate-800 pt-4"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex justify-between items-center gap-3">
+            <span className="text-xs text-slate-400">
+              Audit {audit.id.slice(0, 8)} · {audit.status}
+            </span>
+            {active && (
+              <button
+                className="text-sm text-amber-300"
+                disabled={disabled}
+                onClick={onCancel}
+              >
+                Cancel audit
+              </button>
+            )}
+            {["failed", "partial", "cancelled"].includes(audit.status) && (
+              <button
+                className="text-sm text-cyan-300"
+                disabled={disabled}
+                onClick={onRetry}
+              >
+                Retry evaluation
+              </button>
+            )}
+          </div>
+          <ol className="grid sm:grid-cols-4 gap-3 mt-3">
+            {stages.map((stage, i) => (
+              <li
+                key={stage}
+                className={`rounded-xl p-3 border text-xs ${audit.stages?.[stage]?.status === "completed" ? "border-emerald-800 text-emerald-300" : audit.stage === stage ? "border-cyan-700 text-cyan-300" : "border-slate-800 text-slate-500"}`}
+              >
+                <span className="block font-semibold">
+                  {i + 1}. {labels[i]}
+                </span>
+                <span>{audit.stages?.[stage]?.status || "waiting"}</span>
+              </li>
+            ))}
+          </ol>
+          {audit.error && (
+            <p className="text-amber-300 text-sm mt-3">{audit.error}</p>
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
