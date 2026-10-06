@@ -1,7 +1,7 @@
 import React from 'react';
-import { Scale, Database, ShieldAlert, Users } from 'lucide-react';
+import { Scale, Database, ShieldAlert, Users, BookOpen } from 'lucide-react';
 
-export default function Navbar({ candidateCount = 0, flaggedCount = 0 }) {
+export default function Navbar({ candidateCount = 0, flaggedCount = 0, onOpenJuryPlaybook }) {
   const flaggedPercent = candidateCount > 0 
     ? ((flaggedCount / candidateCount) * 100).toFixed(1) 
     : '0.0';
@@ -23,31 +23,42 @@ export default function Navbar({ candidateCount = 0, flaggedCount = 0 }) {
         </div>
       </div>
 
-      {/* Telemetry Stats with Real Data Source Badge */}
-      <div className="hidden md:flex items-center gap-6 text-xs text-slate-400">
-        <div className="flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-xl border border-slate-800">
-          <Database className="w-4 h-4 text-cyan-400" />
-          <div>
-            <span className="text-slate-500 block text-[10px]">DATASET SOURCE</span>
-            <span className="font-bold text-slate-200">Redrob AI + GitHub API</span>
+      <div className="flex items-center gap-4">
+        {/* Telemetry Stats with Real Data Source Badge */}
+        <div className="hidden lg:flex items-center gap-6 text-xs text-slate-400">
+          <div className="flex items-center gap-2 bg-[#121824] px-3 py-1.5 rounded-xl border border-slate-800">
+            <Database className="w-4 h-4 text-cyan-400" />
+            <div>
+              <span className="text-slate-500 block text-[10px]">DATASET SOURCE</span>
+              <span className="font-bold text-slate-200">Redrob AI + GitHub API</span>
+            </div>
+          </div>
+          <div className="h-6 w-px bg-slate-800" />
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-slate-500" />
+            <div>
+              <span className="text-slate-500 block text-[10px]">REAL PROFILES</span>
+              <span className="font-bold text-slate-200 text-sm">{candidateCount} Audited</span>
+            </div>
+          </div>
+          <div className="h-6 w-px bg-slate-800" />
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-rose-400" />
+            <div>
+              <span className="text-slate-500 block text-[10px]">DECOY / CHEAT DETECTED</span>
+              <span className="font-bold text-rose-400 text-sm">{flaggedPercent}% Flagged</span>
+            </div>
           </div>
         </div>
-        <div className="h-6 w-px bg-slate-800" />
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-slate-500" />
-          <div>
-            <span className="text-slate-500 block text-[10px]">REAL PROFILES</span>
-            <span className="font-bold text-slate-200 text-sm">{candidateCount} Audited</span>
-          </div>
-        </div>
-        <div className="h-6 w-px bg-slate-800" />
-        <div className="flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-rose-400" />
-          <div>
-            <span className="text-slate-500 block text-[10px]">DECOY / CHEAT DETECTED</span>
-            <span className="font-bold text-rose-400 text-sm">{flaggedPercent}% Flagged</span>
-          </div>
-        </div>
+
+        {/* Jury Defense Playbook Button */}
+        <button
+          onClick={onOpenJuryPlaybook}
+          className="bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 border border-cyan-500/30 px-3.5 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 transition cursor-pointer shadow-sm shadow-cyan-500/10"
+        >
+          <BookOpen className="w-4 h-4" />
+          <span className="hidden sm:inline">Jury Defense</span> Playbook
+        </button>
       </div>
     </header>
   );

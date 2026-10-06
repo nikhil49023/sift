@@ -5,9 +5,13 @@ import AuditInput from './components/AuditInput';
 import CandidateProfileCard from './components/CandidateProfileCard';
 import AntiCheatGrid from './components/AntiCheatGrid';
 import CodeCitations from './components/CodeCitations';
+import CommitVelocityChart from './components/CommitVelocityChart';
+import RubricMatrix from './components/RubricMatrix';
 import RadarScorecard from './components/RadarScorecard';
 import Leaderboard from './components/Leaderboard';
 import AuditDossierModal from './components/AuditDossierModal';
+import JuryDefenseModal from './components/JuryDefenseModal';
+import { Scale, Terminal, Activity, Award } from 'lucide-react';
 
 export default function App() {
   const [candidates, setCandidates] = useState(realCandidates);
@@ -18,6 +22,8 @@ export default function App() {
   const [inputUrl, setInputUrl] = useState('');
   const [auditStep, setAuditStep] = useState(0);
   const [isDossierOpen, setIsDossierOpen] = useState(false);
+  const [isJuryPlaybookOpen, setIsJuryPlaybookOpen] = useState(false);
+  const [activeDossierTab, setActiveDossierTab] = useState('forensics'); // 'forensics' | 'citations' | 'velocity' | 'rubric'
 
   const steps = [
     { title: "Agent 1: Ingestion Scout", desc: "Fetching real GitHub/Redrob telemetry & commit graphs..." },
@@ -139,7 +145,8 @@ export default function App() {
     const matchesSearch = cand.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           cand.username.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           cand.repoName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          cand.id.toLowerCase().includes(searchQuery.toLowerCase());
+                          cand.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (cand.primaryLanguages && cand.primaryLanguages.some(l => l.toLowerCase().includes(searchQuery.toLowerCase())));
     if (activeFilter === 'CLEAN') return matchesSearch && cand.riskLevel === 'CLEAN';
     if (activeFilter === 'SUSPICIOUS') return matchesSearch && cand.riskLevel === 'SUSPICIOUS';
     if (activeFilter === 'RED FLAG') return matchesSearch && cand.riskLevel === 'RED FLAG';
@@ -151,7 +158,11 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0B0F17] text-slate-100 flex flex-col font-sans">
       {/* Top Navbar */}
-      <Navbar candidateCount={candidates.length} flaggedCount={flaggedCount} />
+      <Navbar 
+        candidateCount={candidates.length} 
+        flaggedCount={flaggedCount} 
+        onOpenJuryPlaybook={() => setIsJuryPlaybookOpen(true)}
+      />
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 flex flex-col gap-8">
@@ -170,14 +181,80 @@ export default function App() {
         {selectedCandidate && (
           <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* Left Column: Candidate Summary & Anti-Cheat Grid */}
+            {/* Left Column: Candidate Summary & Tabbed Forensic Views */}
             <div className="lg:col-span-2 flex flex-col gap-6">
               <CandidateProfileCard candidate={selectedCandidate} />
-              <AntiCheatGrid antiCheat={selectedCandidate.antiCheat} />
-              <CodeCitations 
-                citations={selectedCandidate.citations} 
-                repoUrl={selectedCandidate.repoUrl} 
-              />
+
+              {/* Dossier Tabs Navigation */}
+              <div className="flex items-center gap-2 bg-[#0E1422] p-1.5 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+                <button
+                  onClick={() => setActiveDossierTab('forensics')}
+                  className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
+                    activeDossierTab === 'forensics'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Scale className="w-3.5 h-3.5 text-cyan-400" />
+                  5-Pillar Anti-Cheat Forensics
+                </button>
+
+                <button
+                  onClick={() => setActiveDossierTab('citations')}
+                  className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
+                    activeDossierTab === 'citations'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Terminal className="w-3.5 h-3.5 text-cyan-400" />
+                  Evidence Citations ({selectedCandidate.citations?.length || 0})
+                </button>
+
+                <button
+                  onClick={() => setActiveDossierTab('velocity')}
+                  className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
+                    activeDossierTab === 'velocity'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                  Commit Cadence
+                </button>
+
+                <button
+                  onClick={() => setActiveDossierTab('rubric')}
+                  className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-2 transition cursor-pointer whitespace-nowrap ${
+                    activeDossierTab === 'rubric'
+                      ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Award className="w-3.5 h-3.5 text-cyan-400" />
+                  JEV-4 Criteria
+                </button>
+              </div>
+
+              {/* Tab Contents */}
+              {activeDossierTab === 'forensics' && (
+                <AntiCheatGrid antiCheat={selectedCandidate.antiCheat} />
+              )}
+
+              {activeDossierTab === 'citations' && (
+                <CodeCitations 
+                  citations={selectedCandidate.citations} 
+                  repoUrl={selectedCandidate.repoUrl} 
+                />
+              )}
+
+              {activeDossierTab === 'velocity' && (
+                <CommitVelocityChart candidate={selectedCandidate} />
+              )}
+
+              {activeDossierTab === 'rubric' && (
+                <RubricMatrix metrics={selectedCandidate.metrics} />
+              )}
             </div>
 
             {/* Right Column: JEV Radar Chart & Decision Verdict */}
@@ -198,6 +275,8 @@ export default function App() {
           setSelectedCandidate={setSelectedCandidate}
           activeFilter={activeFilter}
           setActiveFilter={setActiveFilter}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
         />
 
       </main>
@@ -207,6 +286,12 @@ export default function App() {
         candidate={selectedCandidate}
         isOpen={isDossierOpen}
         onClose={() => setIsDossierOpen(false)}
+      />
+
+      {/* Jury Defense Playbook Modal */}
+      <JuryDefenseModal 
+        isOpen={isJuryPlaybookOpen}
+        onClose={() => setIsJuryPlaybookOpen(false)}
       />
 
       {/* Footer */}
