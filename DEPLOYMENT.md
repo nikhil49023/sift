@@ -12,6 +12,12 @@ Prepared for **The SIFT Core Team**. No cloud projects have been created or publ
 
 Create staging resources first with separate credentials and data. The blueprint uses Singapore, paid API/worker/queue resources, queue persistence, and `noeviction`. Review the provider's displayed charges before creation. The worker performs persistent Git operations, so it is deployed as a background service. [Render Blueprint reference](https://render.com/docs/blueprint-spec).
 
+### Render account check — 6 October 2026
+
+The Render CLI is authenticated and `sainikhil's workspace` is selected. The workspace has no services or environment groups. Account-backed validation of `render.yaml` reports `need_payment_info` for all four resources; provisioning has not started. Add a payment method through Render's workspace Billing settings, keeping the Hobby workspace plan, and supply the production secrets below before creation. No additional Render API key is needed for this authenticated CLI session.
+
+The configured API costs $7/month, the worker $25/month, and the queue $10/month. The retention cron has a $1/month minimum, giving a baseline of approximately **$43/month**, excluding provider usage charges and Supabase/Groq costs. Compute is prorated; this is not a spending cap. [Render compute pricing](https://render.com/pricing), [Render service price examples](https://render.com/articles/production-rails-hosting-guide), [cron billing](https://render.com/docs/cronjobs#compute-plans-and-billing).
+
 ## 1. Create Supabase
 
 1. Create a project near the Render region. Save its database password securely.
