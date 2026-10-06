@@ -8,7 +8,7 @@ SIFT collects public GitHub repository snapshots, inspects code and history, val
 
 - Hackathon submissions use one repository, optional sprint boundaries, and a declared team. Recruiting supports profile discovery, explicit selection of up to five repositories, and an optional job description.
 - Organization membership scopes cohorts, candidates, audits, evidence, decisions, and private reports. Roles are administrator, reviewer, and viewer.
-- Four persisted stages collect evidence, run forensic rules, evaluate the rubric, and assemble an assessment. PostgreSQL checkpoints, BullMQ jobs, cancellation, bounded retries, and an outbox support recovery.
+- A LangGraph workflow coordinates four persisted stages to collect evidence, run forensic rules, evaluate the rubric, and assemble an assessment. PostgreSQL owns evidence/stage checkpoints; BullMQ owns bounded retries. Cancellation stops the graph, and the outbox supports recovery.
 - Five forensic pillars inspect timeline anomalies, concentrated initial commits, contribution history, hollow implementations, and configured template/upstream matches. Missing inputs or coverage are shown as unknown. Observations are prompts for review, not automatic misconduct findings.
 - SIFT checks structured output, evidence IDs, excerpts, line ranges, and dimension-specific sources. Missing evidence is **unscored**, rather than zero. An overall score requires all four dimensions and complete acquisition coverage.
 - The dashboard displays saved evidence and real progress, separate reviewer decisions, and downloadable PDF reports. No seeded candidate or score data drives the application.

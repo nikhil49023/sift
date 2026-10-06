@@ -1,7 +1,7 @@
 import { Queue, Worker, UnrecoverableError, type Job } from "bullmq";
 import { pool, transaction } from "./db.ts";
 import { config } from "./config.ts";
-import { STAGES, type Snapshot, type Evidence } from "@sift/contracts";
+import { type Snapshot, type Evidence } from "@sift/contracts";
 import { ingest, makeEvidence, excludedPath } from "./ingestion.ts";
 import { inspect } from "./forensics.ts";
 import {
@@ -17,6 +17,7 @@ import { ProviderError } from "./github.ts";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ACTIVE_OUTBOX_WORK } from "./jobs.ts";
+import { runAuditGraph } from "./workflow.ts";
 export const connection = { url: config.REDIS_URL };
 let queue: Queue | undefined;
 const getQueue = () => (queue ??= new Queue("sift", { connection }));
@@ -88,15 +89,15 @@ export async function runAudit(id: string, orgId: string) {
       "UPDATE audits SET status='running',error=NULL,updated_at=now() WHERE id=$1 AND org_id=$2 AND cancelled=false",
       [id, orgId],
     );
-    for (const stage of STAGES) {
-      if (await cancelled()) return;
+    await runAuditGraph(id, orgId, async stage => {
+      if (await cancelled()) return false;
       row = (
         await pool.query("SELECT * FROM audits WHERE id=$1 AND org_id=$2", [
           id,
           orgId,
         ])
       ).rows[0];
-      if (row.stages[stage]?.status === "completed") continue;
+      if (row.stages[stage]?.status === "completed") return true;
       const attempt = (
         await pool.query(
           "INSERT INTO stage_attempts(org_id,audit_id,stage,status) VALUES($1,$2,$3,'running') RETURNING id",
@@ -235,7 +236,7 @@ export async function runAudit(id: string, orgId: string) {
             "UPDATE audits SET judgment=$3 WHERE id=$1 AND org_id=$2 AND cancelled=false",
             [id, orgId, proposal],
           );
-          if (await cancelled()) return;
+          if (await cancelled()) return false;
           const judgment = await reviewProposal(
             proposal,
             snapshots,
@@ -283,7 +284,7 @@ export async function runAudit(id: string, orgId: string) {
           "UPDATE stage_attempts SET status='failed',error=$2,finished_at=now() WHERE id=$1",
           [attempt, error instanceof Error ? error.message : "Stage failed"],
         );
-        if (await cancelled()) return;
+        if (await cancelled()) return false;
         await pool.query(
           "UPDATE audits SET error=$3,stages=jsonb_set(stages,ARRAY[$4],$5::jsonb),updated_at=now() WHERE id=$1 AND org_id=$2",
           [
@@ -296,7 +297,8 @@ export async function runAudit(id: string, orgId: string) {
         );
         throw error;
       }
-    }
+      return true;
+    });
   } finally {
     await lock.query("SELECT pg_advisory_unlock(hashtext($1))", [id]);
     lock.release();
