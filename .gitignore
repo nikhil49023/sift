@@ -33,6 +33,8 @@ dist-ssr
 coverage/
 test-results/
 playwright-report/
+output/
+.playwright-cli/
 
 # Python
 __pycache__/

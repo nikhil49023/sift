@@ -1,88 +1,60 @@
-# 🔍 SIFT — System Architecture
+# SIFT architecture
 
-> **Tagline:** Autonomous Code Forensics, Anti-Cheat Verification & JEV Decision Intelligence for Developers & Hackathon Juries.  
-> **Theme:** Theme 1: Agentic AI & Intelligent Systems (Primary) / Theme 7: Decision Intelligence (Secondary)  
-> **Team:** Kilani Sai Nikhil (`[ARCHITECT]`) & Harika Reddy (`[SENTINEL]`)
-
----
-
-## 1. Executive Summary
-
-Technical hiring and hackathon judging suffer from an epidemic of resume fluff, copy-pasted tutorial code, AI-generated boilerplate, and passenger contributions. Traditional ATS keyword matchers and exhausted human juries cannot detect whether a candidate actually wrote the code or downloaded a starter zip at 2 AM.
-
-**SIFT** is an autonomous multi-agent decision intelligence system. With simply a **GitHub profile** or **repository link**, SIFT executes deep Git forensics, runs a 5-pillar Anti-Cheat inspection, evaluates technical claims against a structured rubric via the **JEV (Judgement, Evaluation & Verification)** engine, and synthesizes an unforgeable candidate scorecard with live leaderboards.
-
----
-
-## 2. Multi-Agent Pipeline Architecture (The 4-Agent DAG)
+The SIFT Core Team. This document describes the implemented system.
 
 ```mermaid
 flowchart TD
-    subgraph S1 ["1. Data Ingestion Layer"]
-        Input["Candidate GitHub Handle / Repo URL"] --> Scout["Agent 1: Ingestion Scout"]
-        Scout --> API["GitHub Octokit API (Commits, Diffs, PRs, Languages)"]
-    end
-
-    subgraph S2 ["2. Forensics & Anti-Cheat Layer"]
-        API --> Inspector["Agent 2: Code Depth & Anti-Cheat Inspector"]
-        Inspector --> AC1["Timeline & Sprint Window Audit"]
-        Inspector --> AC2["Diff Velocity & Bulk Zip-Drop Filter"]
-        Inspector --> AC3["Per-Author Churn & Passenger Filter"]
-        Inspector --> AC4["AST Algorithmic Density vs AI Boilerplate"]
-        Inspector --> AC5["Test Suite & Verification Proof"]
-    end
-
-    subgraph S3 ["3. JEV Rubric & Verification Layer"]
-        AC1 & AC2 & AC3 & AC4 & AC5 --> JEVJudge["Agent 3: JEV Verification Judge (Sentinel Engine)"]
-        JEVJudge --> Rubric1["Architectural & Systems Rigor (30%)"]
-        JEVJudge --> Rubric2["Algorithmic Density & Logic Depth (25%)"]
-        JEVJudge --> Rubric3["Testing, Reliability & Verification (25%)"]
-        JEVJudge --> Rubric4["Team Contribution & Collaboration Hygiene (20%)"]
-    end
-
-    subgraph S4 ["4. Decision Intelligence Layer"]
-        Rubric1 & Rubric2 & Rubric3 & Rubric4 --> Ranker["Agent 4: Decision & Ranking Synthesizer"]
-        Ranker --> Output1["Interactive Recruiter & Jury Leaderboard"]
-        Ranker --> Output2["Anti-Cheat Risk Gauge [CLEAN | SUSPICIOUS | RED FLAG]"]
-        Ranker --> Output3["Dimensional Radar Chart & Citations"]
-        Ranker --> Output4["One-Click PDF Verified Dossier"]
-    end
+    UI[React dashboard on Vercel] --> API[Express API on Render]
+    UI --> Auth[Supabase Auth]
+    API --> DB[(Supabase PostgreSQL)]
+    API --> Outbox[Transactional outbox]
+    Outbox --> Queue[Render Key Value / BullMQ]
+    Queue --> Worker[Render worker]
+    Worker --> Scout[Scout: pinned Git and GitHub evidence]
+    Scout --> Forensics[Forensics: five deterministic pillars]
+    Forensics --> Judge[JEV: bounded Gemini packet and citation validation]
+    Judge --> Synth[Synthesizer: scores, coverage and review flags]
+    Synth --> DB
+    Worker --> Storage[Private Supabase PDF storage]
+    Retention[Daily retention job] --> DB
+    Retention --> Storage
 ```
 
----
+## Durable execution
 
-## 3. The 5-Pillar Anti-Cheat Forensics Suite
+Audit creation writes the candidate/audit, idempotency entry, and outbox entry in one transaction. The dispatcher sends jobs with fixed IDs and marks outbox entries only after queue insertion. Workers acquire a PostgreSQL session advisory lock per audit and persist stage attempts and checkpoints. Completed stages are skipped after a restart. Each repository snapshot is saved incrementally at its pinned revision.
 
-1. **Timeline & Sprint Anomaly Filter:** Cross-checks `AuthorDate`, `CommitDate`, and GitHub push events against event/sprint windows. Detects pre-built projects imported under a fresh repo.
-2. **Bulk Zip-Drop & Starter Filter:** Analyzes commit velocity. If 90%+ of code is dumped in 1–2 initial commits with standard framework fingerprints (`create-react-app`, `starter-kit`), it flags boilerplate and recalculates true engineering volume.
-3. **Passenger / Ghost Contributor Filter:** Inspects Git blame and commit diffs per author. Flags team members claiming equal credit who only committed README/comment/formatting edits.
-4. **Hollow Implementation / AI-Slop Detector:** Flags functions with mock hardcoded JSONs, empty `pass` / `TODO` blocks, and low cyclomatic complexity disguised as large line counts.
-5. **License Stripping & Plagiarism Scanner:** Detects stripped open-source headers, unmodified public functions, and uncredited forks.
+BullMQ retries jobs three times with provider-aware backoff. Cancellation is persisted and checked between operations. Evaluation failures after forensics retain a partial assessment. Explicit retry keeps captured snapshots and reruns evaluation; expired raw evidence requires a new audit. A new audit can attach to an existing candidate in the same cohort. Reports and reviewer decisions retain the originating audit ID.
 
----
+The pipeline is currently a linear graph, implemented as a persisted state machine. LangGraph can be introduced when branching, multiple judge reconciliation, or graph-specific resumable interactions become necessary. It is not a current dependency.
 
-## 4. Work Split & Ownership Matrix
+## Acquisition and forensics
 
-### 🤖 Subsystem 1: Lead Systems, Forensics & Agentic Orchestration (Nikhil / `[ARCHITECT]`)
-* GitHub API ingestion & rate-limited cache.
-* 5-Pillar Anti-Cheat Forensics Engine implementation.
-* AST code depth parser & Git blame churn analysis.
-* 4-Agent DAG state machine & tool execution using Gemini 2.5.
-* Express.js backend API endpoints & persistence.
+Public GitHub repositories are normalized to owner/name. Octokit collects cached GitHub metadata, events, PR/review data, and check runs with bounded pagination. Git fetches bare object data without checkout, hooks, submodules, or dependency execution. File count, byte, history, parser, and time limits are enforced. Generated/vendor/binary/symlink content is excluded or disclosed. Evidence records have stable IDs, content hashes, capture dates, snapshot SHAs, and source URLs.
 
-### 🛡️ Subsystem 2: JEV Rubric Engine, Audit Dossier & Dashboard UX (Harika / `[SENTINEL]`)
-* JEV Multi-Dimensional Rubric Engine & Scoring Matrix.
-* Anti-hallucination verification gates (mandatory commit/file citation for every score).
-* Interactive Recruiter / Jury Dashboard (React + Vite + Tailwind CSS, candidate cards, radar chart, anti-cheat status banner).
-* One-click PDF candidate audit dossier export.
-* Hackathon jury presentation & rubric defense playbook.
+Timeline checks distinguish author and committer dates and limited push-event observations. Concentrated initial churn triggers review, not proof of a zip import. Contributions are descriptive and cannot establish identity or productivity. Isolated AST parsing identifies empty and placeholder bodies in supported languages. Similarity compares exact blobs against declared upstream and an organization-approved, revision-pinned template corpus; it is not an exhaustive plagiarism search.
 
----
+## JEV contract
 
-## 5. Technology Stack
+| Dimension | Weight |
+| --- | --- |
+| Systems rigor | 30% |
+| Algorithmic depth | 25% |
+| Testing and verification | 25% |
+| Collaboration hygiene | 20% |
 
-* **Frontend:** React 18, Vite, Tailwind CSS, Lucide React, Recharts
-* **Backend:** Node.js, Express.js, Octokit (@octokit/rest), Zod
-* **AI Engine:** Google Gemini 2.5 Flash / Pro (Structured Output API)
-* **Database:** SQLite (local dev) / Supabase PostgreSQL (production)
-* **Deployment:** Vercel (Frontend) + Render / Railway (Backend)
+Each dimension has anchored levels 0–4 or null for insufficient evidence. The model receives untrusted repository text as data, has no execution tools, and must return structured output. The validator checks evidence IDs, verbatim excerpts, line bounds, and appropriate source kinds. One corrective response is allowed before withholding the judgment. Citation correspondence is verified mechanically; semantic support still requires reviewer judgment.
+
+The weighted overall score is available only when all dimensions are scored and acquisition coverage is complete. Forensic risk is separate from technical quality and role fit. Rankings require an explicit rollout flag and compare the latest eligible audit only within one cohort and rubric version. Reviewers make the final workflow-specific decision and record a rationale.
+
+## Tenant boundaries and lifecycle
+
+Supabase validates bearer sessions. Every API read/write enforces organization membership; viewer roles cannot mutate. SQL RLS gives authenticated users tenant reads and no direct writes. Background operations use a trusted database connection. Outbox, cache, cleanup records, and private storage have no browser policies. Production uses certificate-verified database TLS and short-lived signed PDF URLs.
+
+Raw evidence expires after 30 days. Citation excerpts, source manifests, audit assessments, decisions, and reports are retained for up to a year, with older audits retained while referenced by newer decisions/reports. Daily retention removes raw content, expired reports and caches, and eligible old records. Organization deletion cascades tenant records immediately and queues storage cleanup; cleanup tombstones repeat for seven days to catch in-flight uploads. Shared public GitHub cache entries expire independently.
+
+## Ownership and limits
+
+Harika reviews `backend/src/jev/` and its rubric/citation tests. Nikhil reviews ingestion, forensics, API, persistence, workers, and deployment. Shared contract changes require both owners. See [OWNERSHIP.md](OWNERSHIP.md).
+
+The UI is connected to real API data. Live model evaluation, provider auth/storage, restore drills, and human rubric calibration must be exercised in staging with provider credentials before launch; see [DEPLOYMENT.md](DEPLOYMENT.md).

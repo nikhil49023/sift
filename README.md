@@ -1,65 +1,65 @@
-# 🔍 SIFT
+# SIFT
 
-> **Autonomous Code Forensics, Anti-Cheat Verification & JEV Decision Intelligence for Developers & Hackathon Juries**
+Evidence for human hiring and hackathon decisions. Built by **The SIFT Core Team**.
 
-[![Public Repository](https://img.shields.io/badge/GitHub-Public-blue.svg)](https://github.com/nikhil49023/sift)
-[![Hackathon Track](https://img.shields.io/badge/Track-Agentic_AI_%26_Intelligent_Systems-purple.svg)](https://github.com/nikhil49023/sift)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+SIFT collects public GitHub repository snapshots, inspects code and history, validates JEV (*Judgement, Evaluation & Verification*) judgments against captured evidence, and exports a PDF dossier. Reviewers record the final decision with a rationale. Hashes and citations make evidence inspectable; they do not establish original authorship or eliminate model errors.
 
----
+## Current implementation
 
-## 🌟 Overview
+- Hackathon submissions use one repository, optional sprint boundaries, and a declared team. Recruiting supports profile discovery, explicit selection of up to five repositories, and an optional job description.
+- Organization membership scopes cohorts, candidates, audits, evidence, decisions, and private reports. Roles are administrator, reviewer, and viewer.
+- Four persisted stages collect evidence, run forensic rules, evaluate JEV, and assemble an assessment. PostgreSQL checkpoints, BullMQ jobs, cancellation, bounded retries, and an outbox support recovery.
+- Five forensic pillars inspect timeline anomalies, concentrated initial commits, contribution history, hollow implementations, and configured template/upstream matches. Missing inputs or coverage are shown as unknown. Observations are prompts for review, not automatic misconduct findings.
+- JEV checks structured output, evidence IDs, excerpts, line ranges, and dimension-specific sources. Missing evidence is **unscored**, rather than zero. An overall score requires all four dimensions and complete acquisition coverage.
+- The dashboard displays saved evidence and real progress, separate reviewer decisions, and downloadable PDF reports. No seeded candidate or score data drives the application.
 
-Technical hiring and hackathon judging face a growing crisis of trust:
-* Resumes are flooded with AI-generated buzzwords.
-* Hackathon teams download pre-existing templates, dump them in a single commit, and bluff with shiny presentations.
-* In team projects, passengers who wrote zero lines of code claim equal credit alongside the core builder.
+The backend performs static inspection of Git objects and ASTs. It never installs dependencies or runs submitted code. CI results are reported from GitHub. JavaScript/TypeScript and Python have AST checks; other languages have limited inspection. Large repositories, capped API history, and unavailable upstreams produce explicit limitations. JEV receives a bounded evidence packet, so reviewers must inspect whether its citations support its reasoning.
 
-**SIFT** replaces resume claims with **unforgeable proof of work**. Powered by an autonomous 4-agent DAG, SIFT ingests public GitHub profiles or project repositories, conducts forensic git analysis and anti-cheat checks, evaluates technical depth against a multi-dimensional rubric via the **JEV (Judgement, Evaluation & Verification)** engine, and generates an explainable, audit-backed candidate dossier.
+Rankings remain disabled until calibration is approved. Dataset imports remain disabled until usage rights are verified. Without a Gemini key, forensics still runs and the result remains unscored.
 
----
+## Run locally
 
-## 🛡️ The 5-Pillar Anti-Cheat Suite
+Requires Node.js 22+, Docker Compose, Git, and Python 3.
 
-1. **Timeline & Sprint Window Audit:** Detects pre-built projects imported as fresh hackathon submissions.
-2. **Bulk Zip-Drop & Starter Filter:** Flags single-commit code dumps and isolates bespoke business logic from framework boilerplate.
-3. **Passenger / Ghost Contributor Filter:** Inspects Git blame and commit diffs per author to expose free-riders.
-4. **Hollow Implementation / AI-Slop Detector:** Uncovers mock hardcoded returns, dead code stubs, and low cyclomatic complexity.
-5. **License Stripping & Plagiarism Scanner:** Flags stripped open-source headers and uncredited upstream copies.
-
----
-
-## 🤖 The 4-Agent Autonomous Council
-
-```mermaid
-flowchart LR
-    A["Scout Agent<br/>(Ingestion)"] --> B["Forensics Agent<br/>(Anti-Cheat)"]
-    B --> C["JEV Judge Agent<br/>(Rubric Verification)"]
-    C --> D["Synthesizer Agent<br/>(Decision & Radar)"]
+```bash
+npm ci
+cp .env.example .env
+docker compose up -d
+npm run migrate
 ```
 
-1. **Agent 1: Ingestion Scout** — Fetches full commit history, diffs, PR reviews, branches, and language distributions via GitHub API.
-2. **Agent 2: Forensics & Anti-Cheat Inspector** — Analyzes commit velocity, AST complexity, test coverage, and executes the 5 Anti-Cheat checks.
-3. **Agent 3: JEV Verification Judge** — Evaluates code against a strict 4-pillar rubric using Google Gemini 2.5 with mandatory commit/file citations (zero hallucinations).
-4. **Agent 4: Decision & Ranking Synthesizer** — Aggregates scores, assigns an Authenticity Verdict (`CLEAN`, `SUSPICIOUS`, `RED FLAG`), generates a 4-axis radar profile, and ranks candidates on an interactive leaderboard.
+Set `GITHUB_TOKEN` and `GEMINI_API_KEY` in the ignored root `.env` for authenticated ingestion and model evaluation. Never put provider secrets in `VITE_` variables. The development server and worker load the root `.env`.
 
----
+Start these in separate terminals from the repository root:
 
-## 💻 Tech Stack
+```bash
+npm run dev
+npm run worker
+npm run dev:ui
+```
 
-* **Frontend:** React 18, Vite, Tailwind CSS, Lucide Icons, Recharts
-* **Backend:** Node.js, Express.js, Octokit, Zod
-* **AI Engine:** Google Gemini 2.5 Flash / Pro (Structured Object Output)
-* **Database:** SQLite / PostgreSQL (Supabase)
-* **Deployment:** Vercel (Frontend) + Render / Railway (Backend)
+Open http://localhost:5173. Local mode supplies a development organization and binds the API to loopback. Production rejects local authentication.
 
----
+For integration checks, stop the development worker first so it cannot consume synthetic test jobs:
 
-## 👥 Core Engineering Team
-* **Kilani Sai Nikhil** (`[ARCHITECT]`): Lead Systems, Forensics, Anti-Cheat Rules & Agentic Orchestration Architect
-* **Harika Reddy** (`[SENTINEL]`): Lead Rubric Systems, JEV Verification Integrity, Audit Dossier & UX Lead
+```bash
+npm run build
+INTEGRATION_TESTS=true npm test
+npm audit --audit-level=high
+```
 
----
+Integration checks cover tenant isolation, role enforcement, idempotency, stage recovery, report downloads, storage cleanup, and Supabase-style SQL policies. Unit checks cover contracts, safe parsing, coverage states, and citation rejection. See [DEPLOYMENT.md](DEPLOYMENT.md) for cloud setup and the remaining staging gates.
 
-## 📄 License
-MIT License. Built with first-principles engineering by the SIFT Core Team.
+## Project map
+
+| Directory | Purpose |
+| --- | --- |
+| `backend/src/` | Express API, ingestion, forensic rules, worker, PDFs, retention |
+| `backend/src/jev/` | Rubric, judge harness, citation validation, deterministic aggregation |
+| `shared/src/` | Validated submission and evidence contracts, version identifiers |
+| `frontend/src/` | Authenticated reviewer dashboard |
+| `migrations/` | PostgreSQL schema, tenant policies, private storage setup |
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) and [OWNERSHIP.md](OWNERSHIP.md). Harika owns JEV backend review; Nikhil owns ingestion, orchestration, API, and infrastructure. Git authorship follows who actually performs the work. `INSTRUCTIONS.md` and `FRONTEND_SPRINT_BRIEF.md` are earlier design briefs; this README describes the implemented behavior.
+
+MIT license. The SIFT Core Team.
