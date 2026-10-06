@@ -6,6 +6,7 @@ import WorkspaceScreen from "./components/editorial/WorkspaceScreen";
 import AuthProvider, { useAuth } from "./auth/AuthProvider";
 import AuthScreen from "./components/studio/AuthScreen";
 import RoleScreen from "./components/studio/RoleScreen";
+import StudioFlow from "./components/studio/StudioFlow";
 
 const ForensicsApp = lazy(() => import("./ForensicsApp"));
 export function routeForLocation(location) {
@@ -13,6 +14,9 @@ export function routeForLocation(location) {
     "#home": "home",
     "#login": "login",
     "#roles": "roles",
+    "#intake": "intake",
+    "#processing": "processing",
+    "#results": "results",
     "#workspace": "workspace",
     "#review": "review",
   }[location.hash];
@@ -33,7 +37,15 @@ function AppContent() {
     window.location.hash || window.location.search ? currentRoute() : "loading",
   );
   const [destination, setDestination] = useState("login");
-  const [workflow, setWorkflow] = useState("hackathon");
+  const [workflow, setWorkflow] = useState(() => {
+    try {
+      return sessionStorage.getItem("sift.studio.workflow") === "recruiting"
+        ? "recruiting"
+        : "hackathon";
+    } catch {
+      return "hackathon";
+    }
+  });
   const [signOutError, setSignOutError] = useState("");
 
   const navigate = useCallback((next) => {
@@ -55,7 +67,15 @@ function AppContent() {
     () => navigate(destination),
     [destination, navigate],
   );
-  const authenticated = useCallback(() => navigate("roles"), [navigate]);
+  const authenticated = useCallback(
+    () =>
+      navigate(
+        ["intake", "processing", "results", "review"].includes(screen)
+          ? screen
+          : "roles",
+      ),
+    [screen, navigate],
+  );
   const signOut = async () => {
     try {
       await auth.signOut();
@@ -79,7 +99,8 @@ function AppContent() {
     );
   if (
     screen === "login" ||
-    (["roles", "review"].includes(screen) && !auth.identity)
+    (["roles", "review", "intake", "processing", "results"].includes(screen) &&
+      !auth.identity)
   )
     return (
       <AuthScreen
@@ -96,8 +117,26 @@ function AppContent() {
           onSignOut={signOut}
           onSelect={(next) => {
             setWorkflow(next);
-            navigate(auth.identity.mode === "demo" ? "workspace" : "review");
+            try {
+              sessionStorage.setItem("sift.studio.workflow", next);
+            } catch {
+              /* The current role still works without browser storage. */
+            }
+            navigate("intake");
           }}
+        />
+        {signOutError && <p role="alert">{signOutError}</p>}
+      </>
+    );
+  if (["intake", "processing", "results"].includes(screen))
+    return (
+      <>
+        <StudioFlow
+          key={workflow + ":" + (auth.session?.user?.id || auth.identity.mode)}
+          workflow={workflow}
+          screen={screen}
+          navigate={navigate}
+          onSignOut={signOut}
         />
         {signOutError && <p role="alert">{signOutError}</p>}
       </>
@@ -115,9 +154,9 @@ function AppContent() {
       <div className="max-w-7xl mx-auto px-6 py-4">
         <button
           className="flex items-center gap-2 text-sm text-slate-300"
-          onClick={() => navigate("workspace")}
+          onClick={() => navigate("results")}
         >
-          <ArrowLeft size={16} /> Back to shortlist
+          <ArrowLeft size={16} /> Back to evaluation
         </button>
       </div>
       <Suspense
