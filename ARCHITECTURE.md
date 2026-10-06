@@ -1,6 +1,6 @@
-# 🛡️ Anvaya Sentinel — System Architecture
+# 🔍 SIFT — System Architecture
 
-> **Tagline:** Autonomous Multi-Agent Decision Intelligence for Developer Profiling & Hackathon Jury Scoring.  
+> **Tagline:** Autonomous Code Forensics, Anti-Cheat Verification & JEV Decision Intelligence for Developers & Hackathon Juries.  
 > **Theme:** Theme 1: Agentic AI & Intelligent Systems (Primary) / Theme 7: Decision Intelligence (Secondary)  
 > **Team:** Kilani Sai Nikhil (`[ARCHITECT]`) & Harika Reddy (`[SENTINEL]`)
 
@@ -8,9 +8,9 @@
 
 ## 1. Executive Summary
 
-Technical hiring and hackathon judging suffer from high-friction, subjective, and easily gamed evaluation processes. Resumes and submitted links are flooded with buzzwords, cloned tutorial code, and unverified passenger contributions. 
+Technical hiring and hackathon judging suffer from an epidemic of resume fluff, copy-pasted tutorial code, AI-generated boilerplate, and passenger contributions. Traditional ATS keyword matchers and exhausted human juries cannot detect whether a candidate actually wrote the code or downloaded a starter zip at 2 AM.
 
-**Anvaya Sentinel** is an autonomous multi-agent evaluation pipeline that accepts a developer's GitHub profile or project URL, runs forensic git inspection (commit cadence, diff complexity, test coverage, authentic code vs forks), evaluates the candidate against a multi-dimensional rubric via an LLM-as-a-Judge consensus loop, and generates an explainable, audit-trailed scorecard and ranked leaderboard.
+**SIFT** is an autonomous multi-agent decision intelligence system. With simply a **GitHub profile** or **repository link**, SIFT executes deep Git forensics, runs a 5-pillar Anti-Cheat inspection, evaluates technical claims against a structured rubric via the **JEV (Judgement, Evaluation & Verification)** engine, and synthesizes an unforgeable candidate scorecard with live leaderboards.
 
 ---
 
@@ -18,79 +18,71 @@ Technical hiring and hackathon judging suffer from high-friction, subjective, an
 
 ```mermaid
 flowchart TD
-    subgraph Ingestion ["1. Data Ingestion Layer"]
-        Input["Candidate GitHub Handle / Repo URL"] --> Scout["Agent 1: Scout Agent"]
-        Scout --> API["GitHub Octokit API & Git Forensics"]
+    subgraph S1 ["1. Data Ingestion Layer"]
+        Input["Candidate GitHub Handle / Repo URL"] --> Scout["Agent 1: Ingestion Scout"]
+        Scout --> API["GitHub Octokit API (Commits, Diffs, PRs, Languages)"]
     end
 
-    subgraph Forensics ["2. Code Forensics Layer"]
-        API --> Inspector["Agent 2: Code Depth & Authenticity Inspector"]
-        Inspector --> Metric1["Commit Velocity & Churn Analysis"]
-        Inspector --> Metric2["AST Algorithmic Density vs Boilerplate"]
-        Inspector --> Metric3["Test Suite Verification & CI Health"]
-        Inspector --> Metric4["Fork / Template Detection"]
+    subgraph S2 ["2. Forensics & Anti-Cheat Layer"]
+        API --> Inspector["Agent 2: Code Depth & Anti-Cheat Inspector"]
+        Inspector --> AC1["Timeline & Sprint Window Audit"]
+        Inspector --> AC2["Diff Velocity & Bulk Zip-Drop Filter"]
+        Inspector --> AC3["Per-Author Churn & Passenger Filter"]
+        Inspector --> AC4["AST Algorithmic Density vs AI Boilerplate"]
+        Inspector --> AC5["Test Suite & Verification Proof"]
     end
 
-    subgraph Evaluation ["3. Rubric & Verification Layer"]
-        Metric1 & Metric2 & Metric3 & Metric4 --> Sentinel["Agent 3: Rubric Verification Judge (Sentinel Engine)"]
-        Sentinel --> Rubric1["Architectural & Systems Depth (30%)"]
-        Sentinel --> Rubric2["Algorithmic Rigor & Problem Solving (25%)"]
-        Sentinel --> Rubric3["Testing, Reliability & Verification (25%)"]
-        Sentinel --> Rubric4["Collaboration, Git Hygiene & Docs (20%)"]
+    subgraph S3 ["3. JEV Rubric & Verification Layer"]
+        AC1 & AC2 & AC3 & AC4 & AC5 --> JEVJudge["Agent 3: JEV Verification Judge (Sentinel Engine)"]
+        JEVJudge --> Rubric1["Architectural & Systems Rigor (30%)"]
+        JEVJudge --> Rubric2["Algorithmic Density & Logic Depth (25%)"]
+        JEVJudge --> Rubric3["Testing, Reliability & Verification (25%)"]
+        JEVJudge --> Rubric4["Team Contribution & Collaboration Hygiene (20%)"]
     end
 
-    subgraph Decision ["4. Decision Intelligence Layer"]
+    subgraph S4 ["4. Decision Intelligence Layer"]
         Rubric1 & Rubric2 & Rubric3 & Rubric4 --> Ranker["Agent 4: Decision & Ranking Synthesizer"]
-        Ranker --> Output1["Interactive Recruiter / Jury Leaderboard"]
-        Ranker --> Output2["Forensic Audit Scorecard & Radar Chart"]
-        Ranker --> Output3["Downloadable Verified Candidate Dossier (PDF)"]
+        Ranker --> Output1["Interactive Recruiter & Jury Leaderboard"]
+        Ranker --> Output2["Anti-Cheat Risk Gauge [CLEAN | SUSPICIOUS | RED FLAG]"]
+        Ranker --> Output3["Dimensional Radar Chart & Citations"]
+        Ranker --> Output4["One-Click PDF Verified Dossier"]
     end
 ```
 
 ---
 
-## 3. Subsystem Breakdown & Work Split
+## 3. The 5-Pillar Anti-Cheat Forensics Suite
+
+1. **Timeline & Sprint Anomaly Filter:** Cross-checks `AuthorDate`, `CommitDate`, and GitHub push events against event/sprint windows. Detects pre-built projects imported under a fresh repo.
+2. **Bulk Zip-Drop & Starter Filter:** Analyzes commit velocity. If 90%+ of code is dumped in 1–2 initial commits with standard framework fingerprints (`create-react-app`, `starter-kit`), it flags boilerplate and recalculates true engineering volume.
+3. **Passenger / Ghost Contributor Filter:** Inspects Git blame and commit diffs per author. Flags team members claiming equal credit who only committed README/comment/formatting edits.
+4. **Hollow Implementation / AI-Slop Detector:** Flags functions with mock hardcoded JSONs, empty `pass` / `TODO` blocks, and low cyclomatic complexity disguised as large line counts.
+5. **License Stripping & Plagiarism Scanner:** Detects stripped open-source headers, unmodified public functions, and uncredited forks.
+
+---
+
+## 4. Work Split & Ownership Matrix
 
 ### 🤖 Subsystem 1: Lead Systems, Forensics & Agentic Orchestration (Nikhil / `[ARCHITECT]`)
-1. **GitHub Ingestion Engine (`/backend/services/github_scraper.js`):**
-   * Fetch user repos, commits, PR reviews, branches, language distributions, and commit timestamps.
-   * Rate-limit management & Octokit caching.
-2. **Code Forensics & Authenticity Inspector (`/backend/agents/forensics_agent.js`):**
-   * Computes **Authentic Engineering Index (AEI)**: identifies genuine custom code vs popular library starter templates.
-   * Analyzes commit history to flag bulk "one-shot" uploads vs iterative, verified engineering.
-   * Validates presence of unit tests, CI workflows, and documentation.
-3. **Agent Orchestration & State Machine (`/backend/agents/orchestrator.js`):**
-   * Manages the execution DAG across the 4 agents using Gemini 2.5 Flash / Pro.
-   * Strict schema validation via Zod to enforce deterministic JSON payloads.
-4. **Backend REST API & Database (`/backend/server.js`):**
-   * Express.js API endpoints for candidate evaluation, leaderboard retrieval, and status streaming.
-   * Persistence using SQLite / PostgreSQL.
+* GitHub API ingestion & rate-limited cache.
+* 5-Pillar Anti-Cheat Forensics Engine implementation.
+* AST code depth parser & Git blame churn analysis.
+* 4-Agent DAG state machine & tool execution using Gemini 2.5.
+* Express.js backend API endpoints & persistence.
+
+### 🛡️ Subsystem 2: JEV Rubric Engine, Audit Dossier & Dashboard UX (Harika / `[SENTINEL]`)
+* JEV Multi-Dimensional Rubric Engine & Scoring Matrix.
+* Anti-hallucination verification gates (mandatory commit/file citation for every score).
+* Interactive Recruiter / Jury Dashboard (React + Vite + Tailwind CSS, candidate cards, radar chart, anti-cheat status banner).
+* One-click PDF candidate audit dossier export.
+* Hackathon jury presentation & rubric defense playbook.
 
 ---
 
-### 🛡️ Subsystem 2: Rubric Systems, Verification Integrity & Dashboard UX (Harika / `[SENTINEL]`)
-1. **Rubric Engine & Multi-Criteria Scoring Matrix (`/backend/rubrics/evaluation_rubric.js`):**
-   * Defines structured criteria across 4 dimensions: *Systems Depth, Problem Complexity, Verification & Testing, Git Hygiene & Collaboration*.
-   * Anti-hallucination verification gates ensuring all AI scores are backed by direct commit or code citations.
-2. **Decision Intelligence & Audit Dossier Generator (`/backend/agents/ranking_synthesizer.js`):**
-   * Aggregates multi-agent scores into an overall percentile and recommendation verdict (`STRONG ADVANCE`, `INTERVIEW`, `PASS`).
-   * Generates actionable feedback and jury defense questions for interviewers.
-3. **Interactive Recruiter & Jury Dashboard (`/frontend/src/`):**
-   * High-polish React + Vite + Tailwind CSS interface.
-   * Real-time candidate evaluation input with animated agent pipeline progress.
-   * Candidate comparison leaderboard with dynamic sorting, search, and filtering.
-   * Radar chart visualization (Recharts) mapping candidate dimensional strengths.
-   * Detailed audit drawer/modal with evidence citations.
-4. **PDF Dossier Export & Stage Defense Documentation (`/docs/`):**
-   * Exportable technical summary for hiring committees and hackathon juries.
-   * Rubric compliance defense playbook.
+## 5. Technology Stack
 
----
-
-## 4. Tech Stack & Invariants
-
-* **Frontend:** React.js, Vite, Tailwind CSS, Lucide React, Recharts (Radar / Bar charts)
+* **Frontend:** React 18, Vite, Tailwind CSS, Lucide React, Recharts
 * **Backend:** Node.js, Express.js, Octokit (@octokit/rest), Zod
-* **AI Engine:** Google Gemini 2.5 Flash (Structured Object Generation)
+* **AI Engine:** Google Gemini 2.5 Flash / Pro (Structured Output API)
 * **Database:** SQLite (local dev) / Supabase PostgreSQL (production)
 * **Deployment:** Vercel (Frontend) + Render / Railway (Backend)
