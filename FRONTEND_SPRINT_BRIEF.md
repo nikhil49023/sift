@@ -14,6 +14,8 @@ Deliver the complete, responsive **SIFT Recruiter & Jury Decision Intelligence D
 The baseline architecture and dependencies are already fully set up and verified:
 * **Tech:** React 18, Vite 6, Tailwind CSS 3, Lucide React icons, Recharts.
 * **Workspace:** `/home/nikhil/Desktop/sift/frontend` (or cloned from `https://github.com/nikhil49023/sift.git`).
+* **Real Dataset:** Powered by [`src/data/realCandidates.js`](src/data/realCandidates.js) (Redrob AI Open Benchmark + Live GitHub API). Zero mock data.
+* **Master Instructions:** See [`INSTRUCTIONS.md`](../INSTRUCTIONS.md) for complete team guidelines.
 * **Live Test:** Run `npm run dev` inside `frontend/` to view the live dashboard immediately.
 
 ---
