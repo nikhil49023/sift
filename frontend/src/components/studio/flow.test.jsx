@@ -12,6 +12,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import "@testing-library/jest-dom/vitest";
 import App from "../../App";
 import StudioFlow from "./StudioFlow";
+import ResultsScreen from "./ResultsScreen";
 const state = vi.hoisted(() => ({ auth: null }));
 const request = vi.hoisted(() => vi.fn());
 vi.mock("../../auth/AuthProvider", () => ({
@@ -44,6 +45,50 @@ afterEach(() => {
   vi.useRealTimers();
 });
 describe("Decision Studio journey", () => {
+  it("includes a scored but flagged assessment in Needs review", () => {
+    render(
+      <ResultsScreen
+        run={{
+          workflow: "recruiting",
+          status: "results",
+          brief: { title: "Frontend" },
+          rankingsEnabled: false,
+          items: [
+            {
+              id: "flagged",
+              input: {
+                candidateName: "Flagged entry",
+                repositories: ["sift/ui"],
+              },
+              status: "completed",
+              assessment: { overallScore: 88, riskLevel: "FLAGGED" },
+            },
+            {
+              id: "clear",
+              input: {
+                candidateName: "Clear entry",
+                repositories: ["sift/api"],
+              },
+              status: "completed",
+              assessment: { overallScore: 90, riskLevel: "NO_FLAGS_OBSERVED" },
+            },
+          ],
+        }}
+        identity={{ mode: "local" }}
+        canWrite={true}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Needs review" }));
+    expect(
+      screen.getByRole("button", { name: "Review Flagged entry" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Review Clear entry" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText("flagged", { selector: ".evidence-chip" }),
+    ).toHaveClass("review");
+  });
   it("takes a recruiter through intake, processing, selection, and browser-session recovery", async () => {
     vi.useFakeTimers();
     const view = render(<App />);

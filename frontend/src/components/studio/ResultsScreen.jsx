@@ -54,7 +54,7 @@ export default function ResultsScreen({
   const needsReview = (item) =>
     item.status === "failed" ||
     item.assessment?.overallScore == null ||
-    item.assessment?.riskLevel === "REVIEW_REQUIRED";
+    ["REVIEW_REQUIRED", "FLAGGED"].includes(item.assessment?.riskLevel);
   const filtered = useMemo(
     () =>
       run.items
