@@ -4,6 +4,7 @@ import { config, local } from "./config.ts";
 import { rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { removeReportObjects } from "./reports.ts";
+import { ACTIVE_OUTBOX_WORK } from "./jobs.ts";
 
 export async function purgeDeletedOrganizations() {
   const deleted = (await pool.query("SELECT org_id FROM storage_deletions"))
@@ -56,7 +57,8 @@ export async function runRetention() {
     );
     await c.query("DELETE FROM api_cache WHERE expires_at<now()");
     await c.query(
-      "DELETE FROM outbox WHERE dispatched_at<now()-interval '7 days'",
+      `DELETE FROM outbox o WHERE o.dispatched_at<now()-interval '7 days'
+       AND NOT (${ACTIVE_OUTBOX_WORK})`,
     );
     await c.query(
       "DELETE FROM decisions WHERE created_at<now()-interval '1 year'",

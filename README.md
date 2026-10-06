@@ -48,7 +48,9 @@ DECISION_PROVIDER=none GROQ_API_KEY= TYPESAFE_API_KEY= INTEGRATION_TESTS=true np
 npm audit --audit-level=high
 ```
 
-Integration checks cover tenant isolation, role enforcement, idempotency, stage recovery, report downloads, storage cleanup, and Supabase-style SQL policies. Unit checks cover contracts, safe parsing, coverage states, and citation rejection. See [DEPLOYMENT.md](DEPLOYMENT.md) for cloud setup and the remaining staging gates.
+Integration checks cover tenant isolation, role enforcement, idempotency, stage recovery, Redis job recovery, report downloads, storage cleanup, and Supabase-style SQL policies. Unit checks cover contracts, safe parsing, coverage states, and citation rejection. See [DEPLOYMENT.md](DEPLOYMENT.md) for cloud setup and the remaining staging gates.
+
+The default Render blueprint uses free web and Redis resources. `DEPLOYMENT_MODE=demo` runs the API, one audit worker, queue recovery, and best-effort cleanup in one process. Free services sleep, and repository limits are lower to fit 512 MB. The separate paid layout is retained in `render.production.yaml`; it is optional for the hackathon.
 
 ## Project map
 

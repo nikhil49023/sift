@@ -1,0 +1,72 @@
+envVarGroups:
+  - name: sift-production
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_MODE
+        value: supabase
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: DECISION_PROVIDER
+        value: none
+      - key: TYPESAFE_MODEL
+        value: jev-latest
+      - key: STORAGE_BUCKET
+        value: sift-private
+      - key: RANKINGS_ENABLED
+        value: "false"
+      - key: DATASET_LICENSE_APPROVED
+        value: "false"
+services:
+  - type: web
+    name: sift-api
+    runtime: docker
+    plan: 0.5c-512mb
+    region: singapore
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    preDeployCommand: npm run migrate
+    envVars:
+      - fromGroup: sift-production
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: sift-queue
+          property: connectionString
+  - type: worker
+    name: sift-worker
+    runtime: docker
+    plan: 1c-2g
+    region: singapore
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    dockerCommand: npm run worker
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 300
+    envVars:
+      - fromGroup: sift-production
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: sift-queue
+          property: connectionString
+  - type: keyvalue
+    name: sift-queue
+    plan: 256mb
+    region: singapore
+    maxmemoryPolicy: noeviction
+    persistenceMode: journal-snapshot
+    ipAllowList: []
+  - type: cron
+    name: sift-retention
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    schedule: "17 2 * * *"
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    dockerCommand: npm run retention -w backend
+    envVars:
+      - fromGroup: sift-production

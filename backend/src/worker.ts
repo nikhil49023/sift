@@ -16,6 +16,7 @@ import { importDataset } from "./datasets.ts";
 import { ProviderError } from "./github.ts";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ACTIVE_OUTBOX_WORK } from "./jobs.ts";
 export const connection = { url: config.REDIS_URL };
 let queue: Queue | undefined;
 const getQueue = () => (queue ??= new Queue("sift", { connection }));
@@ -322,6 +323,30 @@ export async function dispatchOutbox() {
     }
   });
 }
+export async function recoverMissingJobs(
+  targetQueue: Pick<Queue, "getJob"> = getQueue(),
+) {
+  const rows = (
+    await pool.query(
+      `SELECT o.id FROM outbox o WHERE o.dispatched_at IS NOT NULL
+       AND (${ACTIVE_OUTBOX_WORK}) ORDER BY o.created_at LIMIT 1000`,
+    )
+  ).rows;
+  let recovered = 0;
+  for (const row of rows) {
+    // Existing jobs, including failed ones, retain BullMQ's bounded retries.
+    if (await targetQueue.getJob(row.id)) continue;
+    recovered += (
+      await pool.query(
+        "UPDATE outbox SET dispatched_at=NULL WHERE id=$1 AND dispatched_at IS NOT NULL",
+        [row.id],
+      )
+    ).rowCount || 0;
+  }
+  if (recovered)
+    console.log(JSON.stringify({ event: "queue_jobs_recovered", recovered }));
+  return recovered;
+}
 export async function recordJobFailure(
   job: Pick<Job, "id" | "name" | "data" | "opts" | "attemptsMade"> | undefined,
   error: Error,
@@ -392,7 +417,7 @@ export async function recordJobFailure(
       [job.data.importId, job.data.orgId, error.message],
     );
 }
-export function startWorker() {
+export function startWorker({ recoverQueue = false } = {}) {
   const worker = new Worker(
     "sift",
     async (job) => {
@@ -427,22 +452,26 @@ export function startWorker() {
       JSON.stringify({ event: "worker_error", message: error.message }),
     ),
   );
-  let dispatching = false;
-  const interval = setInterval(async () => {
+  let dispatching: Promise<void> | undefined;
+  let nextRecovery = 0;
+  const interval = setInterval(() => {
     if (dispatching) return;
-    dispatching = true;
-    try {
-      await dispatchOutbox();
-    } catch (error) {
-      console.error(
-        JSON.stringify({
-          event: "dispatch_failed",
-          message: error instanceof Error ? error.message : "Error",
-        }),
-      );
-    } finally {
-      dispatching = false;
-    }
+    dispatching = (async () => {
+      try {
+        if (recoverQueue && Date.now() >= nextRecovery) {
+          await recoverMissingJobs();
+          nextRecovery = Date.now() + 60000;
+        }
+        await dispatchOutbox();
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            event: "dispatch_failed",
+            message: error instanceof Error ? error.message : "Error",
+          }),
+        );
+      }
+    })().finally(() => { dispatching = undefined; });
   }, 1000);
   console.log(
     JSON.stringify({
@@ -450,18 +479,28 @@ export function startWorker() {
       concurrency: config.WORKER_CONCURRENCY,
     }),
   );
-  for (const signal of ["SIGINT", "SIGTERM"])
-    process.on(signal, async () => {
+  return {
+    worker,
+    async close() {
       clearInterval(interval);
+      await dispatching;
       await worker.close();
       await queue?.close();
-      await pool.end();
-      process.exit(0);
-    });
-  return worker;
+    },
+  };
 }
 if (
   process.argv[1] &&
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
-)
-  startWorker();
+) {
+  const runtime = startWorker();
+  let closing = false;
+  for (const signal of ["SIGINT", "SIGTERM"])
+    process.on(signal, async () => {
+      if (closing) return;
+      closing = true;
+      await runtime.close();
+      await pool.end();
+      process.exit(0);
+    });
+}

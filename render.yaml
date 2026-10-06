@@ -1,52 +1,61 @@
-envVarGroups:
-  - name: sift-production
+services:
+  - type: web
+    name: sift-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: backend/Dockerfile
+    dockerContext: .
+    dockerCommand: sh -c 'node --import tsx backend/scripts/migrate.ts && exec node --import tsx backend/src/server.ts'
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
     envVars:
       - key: NODE_ENV
         value: production
       - key: AUTH_MODE
         value: supabase
+      - key: DEPLOYMENT_MODE
+        value: demo
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=256
+      - key: WORKER_CONCURRENCY
+        value: "1"
+      - key: MAX_REPO_BYTES
+        value: "26214400"
+      - key: MAX_FILES
+        value: "300"
+      - key: MAX_COMMITS
+        value: "1500"
+      - key: MAX_REPO_MS
+        value: "300000"
+      - key: JUDGE_MAX_EVIDENCE_CHARS
+        value: "8000"
+      - key: JUDGE_MAX_OUTPUT_TOKENS
+        value: "2048"
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
       - key: DECISION_PROVIDER
         value: none
-      - key: TYPESAFE_MODEL
-        value: jev-latest
       - key: STORAGE_BUCKET
         value: sift-private
       - key: RANKINGS_ENABLED
         value: "false"
       - key: DATASET_LICENSE_APPROVED
         value: "false"
-services:
-  - type: web
-    name: sift-api
-    runtime: docker
-    plan: 0.5c-512mb
-    region: singapore
-    dockerfilePath: backend/Dockerfile
-    dockerContext: .
-    healthCheckPath: /health
-    autoDeployTrigger: checksPass
-    preDeployCommand: npm run migrate
-    envVars:
-      - fromGroup: sift-production
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: sift-queue
-          property: connectionString
-  - type: worker
-    name: sift-worker
-    runtime: docker
-    plan: 1c-2g
-    region: singapore
-    dockerfilePath: backend/Dockerfile
-    dockerContext: .
-    dockerCommand: npm run worker
-    autoDeployTrigger: checksPass
-    maxShutdownDelaySeconds: 300
-    envVars:
-      - fromGroup: sift-production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_CA_BASE64
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
       - key: REDIS_URL
         fromService:
           type: keyvalue
@@ -54,19 +63,7 @@ services:
           property: connectionString
   - type: keyvalue
     name: sift-queue
-    plan: 256mb
+    plan: free
     region: singapore
     maxmemoryPolicy: noeviction
-    persistenceMode: journal-snapshot
     ipAllowList: []
-  - type: cron
-    name: sift-retention
-    runtime: docker
-    region: singapore
-    plan: 0.5c-512mb
-    schedule: "17 2 * * *"
-    dockerfilePath: backend/Dockerfile
-    dockerContext: .
-    dockerCommand: npm run retention -w backend
-    envVars:
-      - fromGroup: sift-production

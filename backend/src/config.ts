@@ -10,6 +10,7 @@ const Env = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   PORT: z.coerce.number().default(3001),
+  DEPLOYMENT_MODE: z.enum(["split", "demo"]).default("split"),
   DATABASE_URL: z.string().default("postgres://sift:sift@localhost:55432/sift"),
   REDIS_URL: z.string().default("redis://localhost:56379"),
   DATABASE_CA_BASE64: z.string().optional(),
@@ -54,6 +55,8 @@ const Env = z.object({
   DATASET_LICENSE_APPROVED: z.enum(["true", "false"]).default("false"),
 });
 export const config = Env.parse(process.env);
+if (config.DEPLOYMENT_MODE === "demo" && config.WORKER_CONCURRENCY !== 1)
+  throw new Error("Demo deployment requires WORKER_CONCURRENCY=1");
 if (config.NODE_ENV === "production" && config.AUTH_MODE !== "supabase")
   throw new Error("Production requires Supabase authentication");
 if (
