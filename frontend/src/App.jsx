@@ -3,11 +3,16 @@ import { ArrowLeft } from "lucide-react";
 import HomeScreen from "./components/editorial/HomeScreen";
 import LoadingScreen from "./components/editorial/LoadingScreen";
 import WorkspaceScreen from "./components/editorial/WorkspaceScreen";
+import AuthProvider, { useAuth } from "./auth/AuthProvider";
+import AuthScreen from "./components/studio/AuthScreen";
+import RoleScreen from "./components/studio/RoleScreen";
 
 const ForensicsApp = lazy(() => import("./ForensicsApp"));
 export function routeForLocation(location) {
   const namedRoute = {
     "#home": "home",
+    "#login": "login",
+    "#roles": "roles",
     "#workspace": "workspace",
     "#review": "review",
   }[location.hash];
@@ -17,22 +22,22 @@ export function routeForLocation(location) {
     /^#(?:access_token|refresh_token|error)=/.test(location.hash) ||
     new URLSearchParams(location.search).has("code")
   )
-    return "review";
-  return "home";
+    return "login";
+  return "login";
 }
 const currentRoute = () => routeForLocation(window.location);
 
-export default function App() {
+function AppContent() {
+  const auth = useAuth();
   const [screen, setScreen] = useState(() =>
-    currentRoute() !== "home" || window.location.hash
-      ? currentRoute()
-      : "loading",
+    window.location.hash || window.location.search ? currentRoute() : "loading",
   );
-  const [destination, setDestination] = useState("home");
+  const [destination, setDestination] = useState("login");
+  const [workflow, setWorkflow] = useState("hackathon");
+  const [signOutError, setSignOutError] = useState("");
 
   const navigate = useCallback((next) => {
-    window.location.hash =
-      next === "home" ? "home" : next === "review" ? "review" : "workspace";
+    window.location.hash = next;
     setScreen(next);
     window.scrollTo({ top: 0, behavior: "instant" });
   }, []);
@@ -44,13 +49,22 @@ export default function App() {
   }, []);
 
   const start = useCallback(() => {
-    setDestination("workspace");
-    setScreen("loading");
-  }, []);
+    navigate("login");
+  }, [navigate]);
   const finishLoading = useCallback(
     () => navigate(destination),
     [destination, navigate],
   );
+  const authenticated = useCallback(() => navigate("roles"), [navigate]);
+  const signOut = async () => {
+    try {
+      await auth.signOut();
+      setSignOutError("");
+      navigate("login");
+    } catch (error) {
+      setSignOutError(error.message);
+    }
+  };
 
   if (screen === "loading")
     return (
@@ -62,6 +76,31 @@ export default function App() {
         onStartShortlist={start}
         onOpenForensics={() => navigate("review")}
       />
+    );
+  if (
+    screen === "login" ||
+    (["roles", "review"].includes(screen) && !auth.identity)
+  )
+    return (
+      <AuthScreen
+        onAuthenticated={authenticated}
+        onHome={() => navigate("home")}
+      />
+    );
+  if (screen === "roles")
+    return (
+      <>
+        <RoleScreen
+          identity={auth.identity}
+          onHome={() => navigate("home")}
+          onSignOut={signOut}
+          onSelect={(next) => {
+            setWorkflow(next);
+            navigate(auth.identity.mode === "demo" ? "workspace" : "review");
+          }}
+        />
+        {signOutError && <p role="alert">{signOutError}</p>}
+      </>
     );
   if (screen === "workspace")
     return (
@@ -88,8 +127,16 @@ export default function App() {
           </p>
         }
       >
-        <ForensicsApp />
+        <ForensicsApp initialWorkflow={workflow} />
       </Suspense>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }

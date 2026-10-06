@@ -12,6 +12,19 @@ import "@testing-library/jest-dom/vitest";
 import App, { routeForLocation } from "../../App";
 import WorkspaceScreen from "./WorkspaceScreen";
 import LoadingScreen from "./LoadingScreen";
+vi.mock("../../auth/AuthProvider", () => ({
+  default: ({ children }) => children,
+  useAuth: () => ({
+    identity: null,
+    loading: false,
+    client: null,
+    config: null,
+    error: "",
+    enterDemo: vi.fn(),
+    enterLocal: vi.fn(),
+    retry: vi.fn(),
+  }),
+}));
 
 beforeEach(() => {
   localStorage.clear();
@@ -37,33 +50,25 @@ describe("editorial navigation", () => {
   it("preserves sign-in callbacks for the existing authenticated review", () => {
     expect(
       routeForLocation({ hash: "#access_token=demo_callback", search: "" }),
-    ).toBe("review");
+    ).toBe("login");
     expect(routeForLocation({ hash: "", search: "?code=demo_callback" })).toBe(
-      "review",
+      "login",
     );
     expect(routeForLocation({ hash: "#workspace", search: "" })).toBe(
       "workspace",
     );
-    expect(routeForLocation({ hash: "#unknown", search: "" })).toBe("home");
+    expect(routeForLocation({ hash: "#unknown", search: "" })).toBe("login");
   });
 
-  it("opens the workspace from home through the dossier transition and returns home", () => {
+  it("opens account access from the home page", () => {
     render(<App />);
     fireEvent.click(
       screen.getByRole("button", { name: /Start your shortlist/ }),
     );
     expect(
-      screen.getByRole("heading", { name: "Your next chapter." }),
+      screen.getByRole("heading", { name: "Welcome to SIFT." }),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
-    expect(
-      screen.getByRole("heading", { name: "A closer look." }),
-    ).toBeInTheDocument();
-    expect(window.location.hash).toBe("#workspace");
-    fireEvent.click(screen.getByRole("button", { name: "Back to SIFT home" }));
-    expect(
-      screen.getByRole("heading", { name: /The right people/ }),
-    ).toBeInTheDocument();
+    expect(window.location.hash).toBe("#login");
   });
 
   it("restores the correct screen for browser history navigation", () => {

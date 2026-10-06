@@ -12,7 +12,7 @@ import CommitVelocityChart from "./components/CommitVelocityChart";
 import RubricMatrix from "./components/RubricMatrix";
 import JuryDefenseModal from "./components/JuryDefenseModal";
 
-export default function ForensicsApp() {
+export default function ForensicsApp({ initialWorkflow = "hackathon" }) {
   const [settings, setSettings] = useState(null),
     [auth, setAuth] = useState(null),
     [session, setSession] = useState(null);
@@ -20,7 +20,7 @@ export default function ForensicsApp() {
     [orgId, setOrgId] = useState(""),
     [cohorts, setCohorts] = useState([]),
     [cohortId, setCohortId] = useState("");
-  const [workflow, setWorkflow] = useState("hackathon"),
+  const [workflow, setWorkflow] = useState(initialWorkflow),
     [cohortName, setCohortName] = useState(""),
     [orgName, setOrgName] = useState("");
   const [candidates, setCandidates] = useState([]),
