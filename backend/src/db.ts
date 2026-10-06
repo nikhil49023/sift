@@ -2,7 +2,9 @@ import pg from "pg";
 import { config } from "./config.ts";
 export const pool = new pg.Pool({
   connectionString: config.DATABASE_URL,
-  max: 10,
+  max: Math.max(20, config.WORKER_CONCURRENCY * 4),
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000,
   ...(config.AUTH_MODE === "supabase"
     ? {
         ssl: {

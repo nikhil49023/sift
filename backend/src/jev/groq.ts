@@ -117,7 +117,8 @@ export function createGroqCompletion(
           }),
         },
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.name === "AssertionError") throw error;
       throw new ProviderError(
         "Groq connection failed or timed out; evaluation will retry",
         30000,

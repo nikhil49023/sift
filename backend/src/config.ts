@@ -33,6 +33,10 @@ const Env = z.object({
     z.coerce.number().int().min(1024).max(16384).default(4096),
   ),
   DECISION_PROVIDER: z.enum(["none", "typesafe"]).default("none"),
+  DECISION_PROVIDER_URL: z
+    .string()
+    .url()
+    .default("https://api.typesafe.ai/v1/systemone"),
   TYPESAFE_API_KEY: z.string().optional(),
   TYPESAFE_MODEL: z.string().default("jev-latest"),
   JEV_SUPPORT_THRESHOLD: z.coerce.number().min(0.5).max(1).default(0.8),

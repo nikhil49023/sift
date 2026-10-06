@@ -1,6 +1,7 @@
 import { UnrecoverableError } from "bullmq";
 import { z } from "zod";
 import { ProviderError } from "../github.ts";
+import { config } from "../config.ts";
 
 // TypeSafe Jev is a separate decision API. Noul returns P(yes), not prose or
 // the confidence field used by TypeSafe's Choice and Score primitives.
@@ -46,6 +47,7 @@ export function createJevVerifier(
   model: string,
   request: typeof fetch = fetch,
   maxRequestChars = 64000,
+  endpoint = config.DECISION_PROVIDER_URL,
 ): JevVerifier {
   return async ({ state, questions }) => {
     const names = Object.keys(questions).sort();
@@ -60,7 +62,7 @@ export function createJevVerifier(
       );
     let response: Response;
     try {
-      response = await request("https://api.typesafe.ai/v1/systemone", {
+      response = await request(endpoint, {
         method: "POST",
         redirect: "error",
         signal: AbortSignal.timeout(45000),

@@ -42,10 +42,18 @@ async function saveSnapshots(id: string, orgId: string, snapshots: Snapshot[]) {
     );
   });
 }
+function lockKeys(uuid: string): [number, number] {
+  const clean = uuid.replace(/-/g, "");
+  return [
+    parseInt(clean.slice(0, 8), 16) | 0,
+    parseInt(clean.slice(8, 16), 16) | 0,
+  ];
+}
 export async function runAudit(id: string, orgId: string) {
+  const [k1, k2] = lockKeys(id);
   const lock = await pool.connect();
   const acquired = (
-    await lock.query("SELECT pg_try_advisory_lock(hashtext($1)) locked", [id])
+    await lock.query("SELECT pg_try_advisory_lock($1, $2) locked", [k1, k2])
   ).rows[0].locked;
   if (!acquired) {
     lock.release();
@@ -300,8 +308,11 @@ export async function runAudit(id: string, orgId: string) {
       return true;
     });
   } finally {
-    await lock.query("SELECT pg_advisory_unlock(hashtext($1))", [id]);
-    lock.release();
+    try {
+      await lock.query("SELECT pg_advisory_unlock($1, $2)", [k1, k2]);
+    } finally {
+      lock.release();
+    }
   }
 }
 export async function dispatchOutbox() {
