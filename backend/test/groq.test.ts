@@ -118,6 +118,8 @@ test("Groq strict response preserves required nullable citation bounds and exist
       assert.equal(body.model, model);
       assert.equal(body.response_format.json_schema.strict, true);
       assert.equal(body.max_completion_tokens, config.JUDGE_MAX_OUTPUT_TOKENS);
+      assert.equal(body.reasoning_effort, config.GROQ_REASONING_EFFORT);
+      assert.equal(body.reasoning_format, "hidden");
       assert.equal(body.tools, undefined);
       assert.equal(body.stream, undefined);
       const schema = body.response_format.json_schema.schema;
@@ -250,7 +252,7 @@ test("model evidence packets stay within configured bounds and validate only sup
           ) <= config.JUDGE_MAX_EVIDENCE_CHARS,
         );
         assert.ok(!packet.evidence.some((e: any) => e.id === oversized.id));
-        assert.deepEqual(packet.packetCoverage, { selected: 2, total: 3 });
+        assert.deepEqual(packet.packetCoverage, { selected: 2, total: 3, repositories: [{ repository: "test/repo", selected: 2, total: 3, code: 1 }] });
         return success(validWireJudgment());
       }),
     ),

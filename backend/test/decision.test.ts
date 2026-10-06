@@ -17,6 +17,7 @@ import {
 import { reviewProposal } from "../src/jev/review.ts";
 import { makeEvidence } from "../src/ingestion.ts";
 import type { JevVerifier } from "../src/jev/typesafe.ts";
+import { evaluationFingerprint } from "../src/evaluation.ts";
 
 const sha = "a".repeat(40);
 const code = makeEvidence(
@@ -92,6 +93,7 @@ function proposal(): Judgment {
     rubric: RUBRIC_VERSION,
     evidenceBudget: config.JUDGE_MAX_EVIDENCE_CHARS,
     outputBudget: config.JUDGE_MAX_OUTPUT_TOKENS,
+    evaluation: evaluationFingerprint(),
   };
   return result;
 }

@@ -21,6 +21,7 @@ const Env = z.object({
   GITHUB_TOKEN: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
   GROQ_MODEL: z.string().default("openai/gpt-oss-120b"),
+  GROQ_REASONING_EFFORT: z.enum(["low", "medium", "high"]).default("medium"),
   // Accept the old names during the configuration transition; these budgets
   // describe Groq's proposal, not TypeSafe Jev's decision API.
   JUDGE_MAX_EVIDENCE_CHARS: z.preprocess(

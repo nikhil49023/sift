@@ -95,6 +95,10 @@ export function createGroqCompletion(
             model,
             temperature: 0,
             max_completion_tokens: config.JUDGE_MAX_OUTPUT_TOKENS,
+            ...(model.startsWith("openai/gpt-oss-") ? {
+              reasoning_effort: config.GROQ_REASONING_EFFORT,
+              reasoning_format: "hidden",
+            } : {}),
             messages: [
               {
                 role: "system",

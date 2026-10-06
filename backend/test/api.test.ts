@@ -22,6 +22,7 @@ import { makeEvidence } from "../src/ingestion.ts";
 import { proposeJudgment, incompleteJudgment } from "../src/jev/index.ts";
 import { ProviderError } from "../src/github.ts";
 import { purgeDeletedOrganizations } from "../src/retention.ts";
+import { evaluationFingerprint } from "../src/evaluation.ts";
 test("dossier is a real PDF with a provenance section", async () => {
   const pdf = await createPdf({
     candidate: { name: "Synthetic fixture" },
@@ -140,11 +141,18 @@ test(
       assert.equal((await request(`/api/audits/${job.id}`)).status, 200);
       config.RANKINGS_ENABLED = "true";
       const currentVersions = {
+        evaluation: evaluationFingerprint(),
         rubric: RUBRIC_VERSION,
         prompt: PROMPT_VERSION,
         provider: "groq",
         model: config.GROQ_MODEL,
         decisionProvider: config.DECISION_PROVIDER,
+      };
+      const rankingAssessment = {
+        rankable: true, overallScore: 50, riskLevel: "NO_FLAGS_OBSERVED",
+        dimensions: Object.fromEntries(DIMENSIONS.map(k => [k, { level: 2, citations: [{ evidenceId: "synthetic", excerpt: "fixture" }] }])),
+        coverage: [{ repository: "test/repo", complete: true }],
+        evaluationCoverage: { repositories: [{ repository: "test/repo", code: 1 }] },
       };
       for (const [versions, expectedRank] of [
         [currentVersions, 1],
@@ -153,9 +161,9 @@ test(
         [{ ...currentVersions, prompt: "older-prompt" }, null],
         [{ ...currentVersions, decisionProvider: "typesafe" }, null],
       ] as const) {
-        await pool.query("UPDATE audits SET assessment=$2 WHERE id=$1", [
+        await pool.query("UPDATE audits SET status='completed',assessment=$2 WHERE id=$1", [
           job.id,
-          { rankable: true, overallScore: 50, versions },
+          { ...rankingAssessment, versions },
         ]);
         const listing = await (
           await request(`/api/candidates?cohortId=${cohortId}`)
@@ -183,11 +191,10 @@ test(
         [{ ...decisionVersions, decisionThreshold: 0.99 }, true, null],
         [decisionVersions, false, null],
       ] as const) {
-        await pool.query("UPDATE audits SET assessment=$2 WHERE id=$1", [
+        await pool.query("UPDATE audits SET status='completed',assessment=$2 WHERE id=$1", [
           job.id,
           {
-            rankable: true,
-            overallScore: 50,
+            ...rankingAssessment,
             versions,
             verification: { engineeringSupported: supported },
           },

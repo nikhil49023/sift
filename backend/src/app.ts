@@ -24,6 +24,7 @@ import {
 import { pages, githubRequest } from "./github.ts";
 import { reportDownload } from "./reports.ts";
 import { openapi } from "./openapi.ts";
+import { rankCandidates } from "./evaluation.ts";
 
 const uuid = (value: unknown) => z.uuid().parse(value);
 const safeAudit = (row: any) => {
@@ -408,7 +409,7 @@ app.get("/api/candidates", async (req, res) => {
     config.RANKINGS_ENABLED === "true"
       ? (
           await pool.query(
-            `SELECT c.id,a.assessment FROM candidates c JOIN LATERAL(SELECT * FROM audits WHERE candidate_id=c.id AND org_id=c.org_id ORDER BY created_at DESC LIMIT 1) a ON true WHERE c.org_id=$1 AND c.cohort_id=$2 AND a.assessment->>'rankable'='true' AND a.assessment->'versions'->>'rubric'=$3 AND a.assessment->'versions'->>'provider'='groq' AND a.assessment->'versions'->>'model'=$4 AND a.assessment->'versions'->>'prompt'=$5 AND a.assessment->'versions'->>'decisionProvider'=$6 AND ($6='none' OR (a.assessment->'versions'->>'decisionModel'=$7 AND a.assessment->'versions'->>'decisionVersion'=$8 AND a.assessment->'versions'->>'decisionThreshold'=$9 AND a.assessment->'verification'->>'engineeringSupported'='true')) ORDER BY (a.assessment->>'overallScore')::numeric DESC,c.id`,
+            `SELECT c.id,a.assessment FROM candidates c JOIN LATERAL(SELECT * FROM audits WHERE candidate_id=c.id AND org_id=c.org_id ORDER BY created_at DESC LIMIT 1) a ON true WHERE c.org_id=$1 AND c.cohort_id=$2 AND a.status='completed' AND a.assessment->>'rankable'='true' AND a.assessment->'versions'->>'rubric'=$3 AND a.assessment->'versions'->>'provider'='groq' AND a.assessment->'versions'->>'model'=$4 AND a.assessment->'versions'->>'prompt'=$5 AND a.assessment->'versions'->>'decisionProvider'=$6 AND ($6='none' OR (a.assessment->'versions'->>'decisionModel'=$7 AND a.assessment->'versions'->>'decisionVersion'=$8 AND a.assessment->'versions'->>'decisionThreshold'=$9 AND a.assessment->'verification'->>'engineeringSupported'='true'))`,
             [
               org,
               cohort,
@@ -423,16 +424,14 @@ app.get("/api/candidates", async (req, res) => {
           )
         ).rows
       : [];
+  const ranks = rankCandidates(ranked);
   res.json({
     candidates: r.rows.map((row) => ({
       ...row,
-      rank:
-        ranked.findIndex((c) => c.id === row.id) >= 0
-          ? ranked.findIndex((c) => c.id === row.id) + 1
-          : null,
+      rank: ranks.get(row.id) ?? null,
     })),
     total: Number(count),
-    rankedCohortSize: ranked.length,
+    rankedCohortSize: ranks.size,
     page,
     rankingsEnabled: config.RANKINGS_ENABLED === "true",
   });

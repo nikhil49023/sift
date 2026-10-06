@@ -88,4 +88,4 @@ If continuous processing is later required, `render.production.yaml` retains sep
 
 ## Verification
 
-The current free profile passes Render's account-backed validation. Both builds, 29 backend tests (including PostgreSQL recovery/RLS), and four frontend tests pass. The Docker image builds. Live Supabase database TLS/login/storage and Groq evaluation still require the remaining runtime settings; no live backend URL is claimed yet.
+The free profile passes Render's account-backed validation. Verification includes PostgreSQL recovery/RLS, LangGraph cancellation/resume, evidence selection, citation gates, ranking eligibility, and tied ranks. Live Supabase database TLS/login/storage and Groq evaluation still require the remaining runtime settings; no live backend URL is claimed yet.

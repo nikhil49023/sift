@@ -34,6 +34,8 @@ services:
         value: "2048"
       - key: GROQ_MODEL
         value: openai/gpt-oss-120b
+      - key: GROQ_REASONING_EFFORT
+        value: low
       - key: DECISION_PROVIDER
         value: none
       - key: STORAGE_BUCKET

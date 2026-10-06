@@ -15,7 +15,7 @@ export const WEIGHTS = {
 };
 export const RULE_VERSION = "forensics-v1";
 export const RUBRIC_VERSION = "sift-rubric-v1";
-export const PROMPT_VERSION = "judge-v2";
+export const PROMPT_VERSION = "judge-v3";
 export const JEV_VERIFICATION_VERSION = "jev-support-v1";
 export const Repository = z
   .string()
@@ -133,6 +133,12 @@ export type Judgment = z.infer<typeof JudgeOutput> & {
     rubric: string;
     evidenceBudget: number;
     outputBudget: number;
+    evaluation?: string;
+    packetCoverage?: {
+      selected: number;
+      total: number;
+      repositories: { repository: string; selected: number; total: number; code: number }[];
+    };
   };
   verification?: {
     provider: "typesafe";

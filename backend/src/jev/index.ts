@@ -1,7 +1,6 @@
 import {
   JudgeOutput,
   DIMENSIONS,
-  WEIGHTS,
   RULE_VERSION,
   RUBRIC_VERSION,
   PROMPT_VERSION,
@@ -15,6 +14,7 @@ import { config } from "../config.ts";
 import { createGroqCompletion, type JudgeCompletion } from "./groq.ts";
 import { reviewProposal } from "./review.ts";
 import type { JevVerifier } from "./typesafe.ts";
+import { selectEvidence, isTestPath, isVerificationPath, evaluationFingerprint, weightedScore } from "../evaluation.ts";
 
 export function validateJudgment(
   value: unknown,
@@ -55,6 +55,22 @@ export function validateJudgment(
     if (item.level !== null && item.citations.length === 0)
       throw new Error(`Scored dimension ${dimension} has no citation`);
     const sources = item.citations.map(validateCitation);
+    if (dimension === "testingVerification" && item.level !== null) {
+      const indexes = sources.filter(e => e.path === "source-index.json");
+      if (item.level === 0) {
+        if (!indexes.length || !indexes.every(e => {
+          const index = JSON.parse(e.content);
+          return index.complete === true && Array.isArray(index.files)
+            && !index.files.some((path: string) => isVerificationPath(path));
+        })) throw new Error("Testing absence requires a complete source index without test/CI artifacts");
+      }
+      if (item.level >= 2 && !sources.some(e => e.kind === "code" && isTestPath(e.path)))
+        throw new Error("Testing levels 2–4 require cited test source, not CI or documentation alone");
+      if (item.level >= 3 && !sources.some(e => e.kind === "ci" && (() => {
+        try { const value = JSON.parse(e.content); return Array.isArray(value.check_runs) && value.check_runs.length > 0; }
+        catch { return false; }
+      })())) throw new Error("Testing levels 3–4 require captured CI check runs as well as test source");
+    }
     if (
       item.level === 0 &&
       dimension === "testingVerification" &&
@@ -86,7 +102,7 @@ export function validateJudgment(
         (e) =>
           e.kind === "ci" ||
           (e.kind === "code" &&
-            /(^|\/)(tests?|__tests__)(\/|$)|\.(test|spec)\./.test(e.path)) ||
+            isTestPath(e.path)) ||
           (e.path === "source-index.json" && item.level === 0),
       )
     )
@@ -122,28 +138,7 @@ export async function proposeJudgment(
     return incompleteJudgment(
       "Groq evaluation is unavailable: GROQ_API_KEY is not configured. Forensic observations remain available.",
     );
-  const all = snapshots.flatMap((s) => s.evidence);
-  const priority = (e: Evidence) =>
-    e.kind === "ci" || e.kind === "commit"
-      ? 0
-      : e.kind === "code" && /test|spec/i.test(e.path)
-        ? 1
-        : e.kind === "code"
-          ? 2
-          : 3;
-  let bytes = 0;
-  const packet: Evidence[] = [];
-  for (const e of [...all].sort((a, b) => priority(a) - priority(b))) {
-    // Include whole evidence objects or skip them; excerpt validation always uses the same captured content.
-    if (
-      e.content.length > 20000 ||
-      bytes + e.content.length > config.JUDGE_MAX_EVIDENCE_CHARS
-    )
-      continue;
-    packet.push(e);
-    bytes += e.content.length;
-    if (packet.length >= 80) break;
-  }
+  const { evidence: packet, coverage: packetCoverage } = selectEvidence(snapshots);
   const complete =
     completion || createGroqCompletion(config.GROQ_API_KEY!, config.GROQ_MODEL);
   let correction = "";
@@ -157,7 +152,7 @@ export async function proposeJudgment(
           ...s.coverage,
         })),
         jobDescription: input.jobDescription || null,
-        packetCoverage: { selected: packet.length, total: all.length },
+        packetCoverage,
         correction,
       }),
     );
@@ -193,6 +188,8 @@ export async function proposeJudgment(
           rubric: RUBRIC_VERSION,
           evidenceBudget: config.JUDGE_MAX_EVIDENCE_CHARS,
           outputBudget: config.JUDGE_MAX_OUTPUT_TOKENS,
+          evaluation: evaluationFingerprint(),
+          packetCoverage,
         },
       };
     } catch (error) {
@@ -217,6 +214,7 @@ export function isCurrentProposal(
     generation.rubric !== RUBRIC_VERSION ||
     generation.evidenceBudget !== config.JUDGE_MAX_EVIDENCE_CHARS ||
     generation.outputBudget !== config.JUDGE_MAX_OUTPUT_TOKENS
+    || generation.evaluation !== evaluationFingerprint()
   )
     return false;
   try {
@@ -260,14 +258,14 @@ export function synthesize(
     (!judgment.verification ||
       judgment.verification.status === "disabled" ||
       judgment.verification.engineeringSupported);
-  const overallScore = complete
-    ? Math.round(
-        DIMENSIONS.reduce(
-          (n, k) => n + judgment.dimensions[k].level! * 25 * WEIGHTS[k],
-          0,
-        ) * 10,
-      ) / 10
-    : null;
+  const overallScore = complete ? weightedScore(judgment.dimensions) : null;
+  const rankingReasons: string[] = [];
+  if (!complete) rankingReasons.push("Incomplete evidence or dimensional assessment");
+  if (!DIMENSIONS.every(k => judgment.dimensions[k].citations.length > 0)) rankingReasons.push("Scored dimensions lack verified citations");
+  if (findings.some(f => f.status === "FAIL")) rankingReasons.push("Forensic flags require human review");
+  if (!isCurrentProposal(judgment, snapshots.flatMap(s => s.evidence))) rankingReasons.push("Evaluation settings or citations differ from the current policy");
+  if (snapshots.some(s => !judgment.generation?.packetCoverage?.repositories.some(r => r.repository === s.repository && r.code > 0)))
+    rankingReasons.push("The model packet did not include source code from every repository");
   const riskLevel = !snapshots.length
     ? "INSUFFICIENT_EVIDENCE"
     : findings.some((f) => f.status === "FAIL")
@@ -286,7 +284,9 @@ export function synthesize(
   ]);
   return {
     overallScore,
-    rankable: complete,
+    rankable: rankingReasons.length === 0,
+    rankingEligibility: { eligible: rankingReasons.length === 0, reasons: rankingReasons },
+    evaluationCoverage: judgment.generation?.packetCoverage || null,
     riskLevel,
     summary: judgment.summary,
     roleFit: judgment.roleFit,
@@ -325,6 +325,7 @@ export function synthesize(
     })),
     versions: {
       rules: RULE_VERSION,
+      evaluation: judgment.generation?.evaluation || null,
       rubric: RUBRIC_VERSION,
       prompt: PROMPT_VERSION,
       provider: judgment.generation?.provider || null,
